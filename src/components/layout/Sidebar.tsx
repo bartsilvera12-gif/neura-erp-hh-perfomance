@@ -176,18 +176,8 @@ const MENU_STRUCTURE: MenuItem[] = [
       { label: "Equipos y supervisión", href: "/configuracion/omnicanal-equipos" },
     ],
   },
-  // Ofertas del home: modulo standalone para configurar el banner "Ofertas
-  // de la semana" del sitio publico (countdown + 3 productos destacados).
-  // La ruta sigue siendo /configuracion/ofertas-home; el slug es
-  // 'configuracion' para que herede el grant de modulo del admin sin tener
-  // que insertar una fila nueva en `modulos` para 'ofertas-home'.
-  {
-    key: "ofertas_home",
-    slug: "configuracion",
-    label: "Ofertas del home",
-    href: "/configuracion/ofertas-home",
-    icon: Sparkles,
-  },
+  // "Ofertas del home" se elimino junto con el sitio web publico: configuraba
+  // el banner "Ofertas de la semana" de esa web. Sin sitio no tiene destino.
   // Items ocultos en ferreteria (no aplican / duplicados):
   // - Planes: suscripciones, modelo SaaS.
   // - Gestion Clientes: duplicado de Clientes con vista distinta.
@@ -216,7 +206,7 @@ const MENU_STRUCTURE: MenuItem[] = [
  */
 const MENU_FAMILIES: { id: string; titulo: string; keys: string[] }[] = [
   { id: "inicio", titulo: "Inicio", keys: ["dashboard"] },
-  { id: "comercial", titulo: "Comercial", keys: ["clientes", "crm", "gestion-clientes", "ventas", "pedidos", "presupuestos", "comisiones", "planes", "ofertas_home"] },
+  { id: "comercial", titulo: "Comercial", keys: ["clientes", "crm", "gestion-clientes", "ventas", "pedidos", "presupuestos", "comisiones", "planes"] },
   { id: "finanzas", titulo: "Finanzas", keys: ["gastos", "otros_ingresos", "entidades_bancarias", "notas_credito", "reportes"] },
   { id: "operaciones", titulo: "Operaciones", keys: ["inventario", "compras", "recetas", "proyectos"] },
   { id: "omnicanal", titulo: "Omnicanal", keys: ["conversaciones", "conversaciones-finalizadas", "historial-omnicanal", "monitoreo", "campanas"] },

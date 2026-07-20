@@ -51,8 +51,7 @@ nombres; los valores no se versionan nunca.
 `SIFEN_SECRETS_KEY` · `WHATSAPP_TOKEN` · `WHATSAPP_PHONE_NUMBER_ID` ·
 `WHATSAPP_VERIFY_TOKEN` · `WHATSAPP_APP_SECRET` · `FACTURA_PREFIJO` ·
 `FACTURA_DIAS_CREDITO_DEFAULT` · `YCLOUD_WEBHOOK_EMPRESA_ID` ·
-`GOOGLE_CLOUD_VISION_API_KEY` · `NEXT_PUBLIC_SUPER_ADMIN_EMAILS` ·
-`SITIO_HOST_REGEX`
+`GOOGLE_CLOUD_VISION_API_KEY` · `NEXT_PUBLIC_SUPER_ADMIN_EMAILS`
 
 > `SIFEN_SECRETS_KEY` cifra la contraseña del certificado digital. Definila
 > **antes** de cargar el certificado y no la pierdas: si cambia, las
@@ -136,11 +135,15 @@ define en un único lugar:
 > Los logos de **Zentra** son la marca de la plataforma y se conservan
 > deliberadamente. El logo de HH Performance es el del cliente.
 
-## Sitio público
+## Sitio público — eliminado
 
-La funcionalidad existe (`src/middleware.ts` + `src/app/api/sitio/*`) pero
-`public/sitio/` está vacío: el contenido del repositorio de origen pertenecía a
-Ferretería República. Ver [`public/sitio/README.md`](public/sitio/README.md).
+El repositorio de origen servía además un sitio web público estático
+(`public/sitio/`, rutas `/api/sitio/*`, reescritura por hostname en el
+middleware y la pantalla "Ofertas del home"). **Todo eso se retiró**: esta
+instancia es únicamente el ERP.
+
+Si en el futuro HH Performance quiere un sitio web, conviene construirlo como
+proyecto aparte en lugar de reintroducir el acoplamiento.
 
 ## Documentación
 
