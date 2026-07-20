@@ -10,7 +10,7 @@ enabled = true
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` and `graphql_public` schemas are included by default.
-# Instancia dedicada monocliente (HH Perfomance): schema único `hhperfomance`.
+# Instancia dedicada monocliente (HH Performance): schema único `hhperfomance`.
 # Esta instancia NO expone schemas de otros clientes: la lista es exactamente
 # el schema propio más los globales de Supabase.
 schemas = ["public", "graphql_public", "hhperfomance"]

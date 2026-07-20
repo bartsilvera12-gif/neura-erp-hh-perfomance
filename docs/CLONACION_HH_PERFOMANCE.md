@@ -1,6 +1,6 @@
-# Clonación inicial — instancia HH Perfomance
+# Clonación inicial — instancia HH Performance
 
-Informe técnico de la creación de la instancia monocliente **HH Perfomance** a
+Informe técnico de la creación de la instancia monocliente **HH Performance** a
 partir del ERP de Ferretería República. Sin credenciales ni datos productivos.
 
 Fecha: 2026-07-20
@@ -210,7 +210,7 @@ La lectura vía PostgREST devolvió `[]` con la clave `anon`: es el comportamien
 | Archivo | Cambio |
 |---|---|
 | `src/lib/supabase/schema.ts` | Fallback `enlodemari` → `hhperfomance`; soporte de `NEXT_PUBLIC_APP_DB_SCHEMA` / `APP_DB_SCHEMA`; export `NEURA_CLIENT_NAME`; comentarios corregidos |
-| `src/app/layout.tsx` | `title` / `description` → HH Perfomance |
+| `src/app/layout.tsx` | `title` / `description` → HH Performance |
 | `package.json` | `name` → `neura-erp-hh-perfomance` |
 | `supabase/config.toml` | `schemas` y `extra_search_path` → sólo `hhperfomance` + globales |
 | `src/app/dashboard/conversaciones/page.tsx` | Fallback `"zentra_erp"` → `SUPABASE_APP_SCHEMA` |
@@ -264,7 +264,7 @@ escribir credenciales a disco.
    está más avanzado que la rama `perf/optimization-batch-1` (p. ej. tablas de
    `devoluciones_venta`). Es un superset compatible.
 
-## 12. Datos pendientes de HH Perfomance
+## 12. Datos pendientes de HH Performance
 
 No se inventó ninguna información comercial ni fiscal. Para poner la instancia
 operativa hacen falta:

@@ -1,10 +1,10 @@
-# Neura ERP — HH Perfomance
+# Neura ERP — HH Performance
 
-Instancia dedicada **monocliente** del ERP Neura para **HH Perfomance**.
+Instancia dedicada **monocliente** del ERP Neura para **HH Performance**.
 
 | | |
 |---|---|
-| Cliente | HH Perfomance |
+| Cliente | HH Performance |
 | Repositorio | `bartsilvera12-gif/neura-erp-hh-perfomance` |
 | Rama principal | `main` |
 | Schema PostgreSQL | `hhperfomance` |

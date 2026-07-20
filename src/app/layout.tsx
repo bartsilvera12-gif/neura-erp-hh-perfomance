@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HH Perfomance",
-  description: "Sistema de gestión empresarial HH Perfomance",
+  title: "HH Performance",
+  description: "Sistema de gestión empresarial HH Performance",
 };
 
 export default function RootLayout({

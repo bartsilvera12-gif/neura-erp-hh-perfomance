@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * Schema Postgres único de esta instancia.
  *
- * Instancia dedicada monocliente: HH Perfomance.
+ * Instancia dedicada monocliente: HH Performance.
  *
  * El fallback NO es decorativo: en el browser sólo se inlinean las variables
  * `NEXT_PUBLIC_*`, así que el código cliente que no reciba
@@ -41,7 +41,7 @@ export const SUPABASE_APP_SCHEMA: string = NEURA_CLIENT_SCHEMA;
 export const NEURA_CLIENT_NAME: string =
   process.env.NEXT_PUBLIC_NEURA_CLIENT_NAME?.trim() ||
   process.env.NEURA_CLIENT_NAME?.trim() ||
-  "HH Perfomance";
+  "HH Performance";
 
 /**
  * Resolución de schema operativo por empresa.

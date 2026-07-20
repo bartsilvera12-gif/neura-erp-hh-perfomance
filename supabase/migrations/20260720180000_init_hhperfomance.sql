@@ -1,5 +1,5 @@
 -- =====================================================================
--- Migracion inicial: instancia monocliente HH Perfomance
+-- Migracion inicial: instancia monocliente HH Performance
 -- Schema destino: hhperfomance
 --
 -- Origen estructural: schema 'ferreteriarepublica' (Ferreteria Republica),

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
+import { NEURA_CLIENT_NAME } from "@/lib/supabase/schema";
 
 /**
  * GET /api/ventas/[id]/ticket?w=58|80&mode=comandas&auto=1
@@ -17,7 +18,11 @@ import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
  * No toca SIFEN, no genera XML, no usa timbrado.
  */
 
-const NEGOCIO = "EN LO DE MARI";
+/** Nombre del negocio de esta instancia (antes venía hardcodeado a otro cliente). */
+const NEGOCIO = NEURA_CLIENT_NAME;
+
+/** Logo del cliente, servido desde `public/`. Se imprime en el encabezado del ticket. */
+const LOGO_SRC = "/brand/hh-performance-logo.png";
 
 // ── Clasificación PIZZERÍA / PLANCHA ───────────────────────────────────────
 // Primary: categoría hija del producto. Fallback: prefijo de SKU.
@@ -216,7 +221,7 @@ function renderCopia(opts: {
     : `<div class="footer-cocina">${formatFecha(venta.fecha)}</div>`;
 
   return `<section class="paper ${isLast ? "last" : ""}">
-    ${headerCocina || `<h1>${NEGOCIO}</h1>`}
+    ${headerCocina || `<img class="logo" src="${LOGO_SRC}" alt="${NEGOCIO}"><h1>${NEGOCIO}</h1>`}
     <div class="meta">
       ${escapeHtml(venta.numero_control)}<br>
       ${formatFecha(venta.fecha)}
@@ -361,6 +366,7 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
   body { font-family: ui-monospace, "Courier New", monospace; font-size: ${fontPx}px; color: #000; background: #f1f1f1; margin: 0; padding: 20px; }
   .paper { background: #fff; width: ${widthMm}mm; margin: 0 auto 12mm; padding: 6mm 4mm; box-shadow: 0 1px 4px rgba(0,0,0,0.1); page-break-after: always; break-after: page; }
   .paper.last { page-break-after: auto; break-after: auto; margin-bottom: 0; }
+  .logo { display: block; margin: 0 auto 1.5mm; width: ${widthMm === 58 ? 26 : 34}mm; height: auto; }
   h1 { font-size: ${fontPx + 4}px; text-align: center; margin: 0 0 2mm; letter-spacing: 1px; }
   .sector-banner { font-size: ${fontPx + 6}px; font-weight: 800; text-align: center; padding: 2mm; border: 2px solid #000; margin: 0 0 3mm; letter-spacing: 1px; }
   .meta { font-size: ${fontPx - 1}px; text-align: center; margin: 1mm 0 2mm; }
