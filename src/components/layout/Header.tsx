@@ -117,7 +117,7 @@ export default function Header() {
             >
               <Image
                 src="/brand/hh-performance-logo.png"
-                alt="Ferretería República"
+                alt="HH Performance"
                 width={72}
                 height={72}
                 sizes="36px"
