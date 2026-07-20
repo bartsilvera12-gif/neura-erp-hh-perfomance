@@ -55,17 +55,21 @@ tiempo de build.
 
 ## Migraciones
 
-La estructura completa vive en una única migración inicial:
+```
+supabase/migrations/
+  20260720180000_init_hhperfomance.sql          # estructura completa
+  20260720190000_enable_rls_remaining_tables.sql # RLS en las 29 tablas restantes
+```
 
-```
-supabase/migrations/20260720180000_init_hhperfomance.sql
-```
+Tras aplicarlas, las **132 tablas** tienen RLS habilitado con policies basadas
+en `puede_acceder_empresa(empresa_id)`.
 
 Aplicación:
 
 ```bash
-psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction \
-  -f supabase/migrations/20260720180000_init_hhperfomance.sql
+for f in supabase/migrations/*.sql; do
+  psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f "$f"
+done
 ```
 
 Las migraciones nuevas van en `supabase/migrations/` y deben calificar siempre

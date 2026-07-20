@@ -87,8 +87,8 @@ Aplicada en una única transacción (`--single-transaction`, `ON_ERROR_STOP=1`).
 | Tablas | 132 | **132** |
 | Columnas | 1830 | **1830** |
 | Índices | 499 | **499** |
-| Policies RLS | 402 | **402** |
-| Tablas con RLS | 103 | **103** |
+| Policies RLS | 402 | **518** ¹ |
+| Tablas con RLS | 103 | **132** ¹ |
 | Triggers | 62 | **62** |
 | Vistas | 0 | 0 |
 | Secuencias | 0 | 0 |
@@ -97,6 +97,8 @@ Aplicada en una única transacción (`--single-transaction`, `ON_ERROR_STOP=1`).
 
 **Diferencias explicadas:**
 
+- **¹ RLS (+29 tablas, +116 policies):** divergencia deliberada respecto del
+  origen. Ver §6.1.
 - **Funciones (−6):** las 6 funciones de tooling multi-tenant eliminadas en la
   sanitización (§4). Ninguna es lógica de negocio del ERP.
 - **`information_schema` vs `pg_constraint`:** una lectura inicial vía
@@ -127,6 +129,48 @@ No se insertaron seeds ni empresa ni usuarios.
 | Cualquier otro tenant | **0** |
 
 Referencias textuales a otros tenants en funciones y policies del destino: **0**.
+
+### 6.1 RLS en las 29 tablas desprotegidas
+
+Migración: `supabase/migrations/20260720190000_enable_rls_remaining_tables.sql`
+
+Tras la clonación, 29 de las 132 tablas quedaban **sin RLS y sin ninguna
+policy** — 28 de ellas legibles por `anon` sin restricción, incluyendo
+`cajas`, `caja_movimientos`, `cuentas_por_cobrar`, `recibos_dinero`,
+`ordenes_compra` y `presupuestos`. El schema de origen presenta exactamente el
+mismo hueco.
+
+Las 29 tablas poseen `empresa_id`, por lo que se aplicó el **mismo patrón que
+ya usaban las otras 103** (95 de 100 policies `SELECT` del schema):
+
+```sql
+ALTER TABLE hhperfomance.<tabla> ENABLE ROW LEVEL SECURITY;
+CREATE POLICY <tabla>_select ON hhperfomance.<tabla>
+  FOR SELECT USING (hhperfomance.puede_acceder_empresa(empresa_id));
+-- + insert (WITH CHECK), update (USING + WITH CHECK), delete (USING)
+```
+
+donde `puede_acceder_empresa(uuid)` = `es_super_admin() OR empresa_id =
+empresa_id_actual()`.
+
+Resultado: **132/132 tablas con RLS**, 518 policies, **0 tablas desprotegidas
+accesibles por `anon`**, 0 tablas con RLS sin policies.
+
+Se aplicó con las tablas vacías y sin usuarios ni empresa creados, cuando el
+radio de impacto es nulo. `service_role` posee `rolbypassrls`, por lo que el
+código server-side no se ve afectado.
+
+**Verificación funcional** (fila QA en `cajas`, luego eliminada):
+
+| Rol | Resultado |
+|---|---|
+| superusuario (`psql`) | ve la fila |
+| `anon` vía PostgREST | `[]` — **RLS bloquea** |
+| `service_role` vía PostgREST | ve la fila (`bypassrls`) |
+
+El schema de origen **no fue modificado**: sigue con 103/132 tablas con RLS.
+Esta es una divergencia intencional en la que la copia queda **más protegida**
+que el origen.
 
 ## 7. Exposición en PostgREST
 
@@ -198,9 +242,11 @@ escribir credenciales a disco.
 
 ## 11. Riesgos y limitaciones
 
-1. **28 tablas sin RLS accesibles por `anon`.** Postura heredada, **idéntica** en
-   origen y destino. No se modificó para no introducir cambios funcionales, pero
-   conviene auditarla antes de exponer la instancia a producción.
+1. ~~28 tablas sin RLS accesibles por `anon`.~~ **RESUELTO** — ver §6.1.
+   Las 132 tablas tienen RLS con policies. Pendiente de validación funcional
+   end-to-end una vez existan empresa y usuarios reales: si algún flujo leía
+   estas tablas con `anon`/`authenticated` sin empresa válida en el JWT, ahora
+   devolverá vacío en lugar de todo.
 2. **9 funciones `SECURITY DEFINER`**, 5 de ellas con `search_path` a `public`.
    Se corrigieron sólo las que apuntaban a otros tenants; las de `public` se
    dejaron como en el origen.
