@@ -146,7 +146,9 @@ const MENU_STRUCTURE: MenuItem[] = [
   // Otros ingresos: ingresos manuales que NO son ventas de productos (cartones,
   // servicios, alquileres). Suman a caja, no tocan inventario. Slug 'ventas'
   // para heredar acceso (mismo permiso que Caja).
-  { key: "otros_ingresos", slug: "ventas", label: "Otros ingresos", href: "/otros-ingresos", icon: Wallet },
+  // Ocultado a pedido de HH Performance (codigo y ruta conservados: sigue
+  // accesible por URL en /otros-ingresos si se quiere reactivar).
+  // { key: "otros_ingresos", slug: "ventas", label: "Otros ingresos", href: "/otros-ingresos", icon: Wallet },
   // Entidades bancarias: cajas, bancos, tarjetas, billeteras usadas para
   // conciliacion de transferencias y tarjetas en cobros/ventas. Era submenu
   // de Configuracion; ahora modulo standalone para mejor accesibilidad.
