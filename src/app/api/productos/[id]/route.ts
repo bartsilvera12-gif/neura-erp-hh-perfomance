@@ -10,11 +10,16 @@ const PRODUCTO_COLS =
   "unidad_medida, metodo_valuacion, activo, created_at, updated_at, " +
   "codigo_barras, codigo_barras_interno, imagen_path, imagen_url, " +
   "categoria_principal_id, ubicacion_principal_id, proveedor_principal_id, " +
-  "es_vendible, es_insumo, controla_stock, valorizado, unidad_compra, unidad_receta, " +
-  "factor_compra_receta, tiempo_prep_minutos, descripcion";
+  "es_vendible, es_insumo, controla_stock, destacado, oferta_semana_destacada, discount_type, discount_value, discount_starts_at, discount_ends_at, valorizado, unidad_compra, unidad_receta, " +
+  "factor_compra_receta, tiempo_prep_minutos, descripcion, precio_mayorista, cantidad_minima_mayorista, precio_distribuidor, modo_receta";
 
 function toNumber(v: unknown): unknown {
   return typeof v === "string" ? Number(v) : v;
+}
+function toNumberOrNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 function rowToApi(r: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -24,6 +29,9 @@ function rowToApi(r: Record<string, unknown>): Record<string, unknown> {
     stock_actual: toNumber(r.stock_actual),
     stock_minimo: toNumber(r.stock_minimo),
     factor_compra_receta: toNumber(r.factor_compra_receta),
+    precio_mayorista: r.precio_mayorista != null ? toNumber(r.precio_mayorista) : null,
+    cantidad_minima_mayorista: r.cantidad_minima_mayorista != null ? toNumber(r.cantidad_minima_mayorista) : null,
+    precio_distribuidor: r.precio_distribuidor != null ? toNumber(r.precio_distribuidor) : null,
   };
 }
 
@@ -135,6 +143,30 @@ export async function PATCH(
     if (typeof body.es_vendible === "boolean") patch.es_vendible = body.es_vendible;
     if (typeof body.es_insumo === "boolean") patch.es_insumo = body.es_insumo;
     if (typeof body.controla_stock === "boolean") patch.controla_stock = body.controla_stock;
+    if (typeof body.destacado === "boolean") patch.destacado = body.destacado;
+    if (typeof body.oferta_semana_destacada === "boolean") patch.oferta_semana_destacada = body.oferta_semana_destacada;
+    if (body.discount_type !== undefined) {
+      patch.discount_type =
+        body.discount_type === "percentage" || body.discount_type === "fixed"
+          ? body.discount_type
+          : null;
+    }
+    if (body.discount_value !== undefined) {
+      const v = toNumber(body.discount_value);
+      patch.discount_value = typeof v === "number" && v >= 0 ? v : 0;
+    }
+    if (body.discount_starts_at !== undefined) {
+      patch.discount_starts_at =
+        typeof body.discount_starts_at === "string" && body.discount_starts_at.trim()
+          ? body.discount_starts_at
+          : null;
+    }
+    if (body.discount_ends_at !== undefined) {
+      patch.discount_ends_at =
+        typeof body.discount_ends_at === "string" && body.discount_ends_at.trim()
+          ? body.discount_ends_at
+          : null;
+    }
     if (typeof body.valorizado === "boolean") patch.valorizado = body.valorizado;
     if (body.unidad_compra !== undefined)
       patch.unidad_compra = body.unidad_compra == null ? null : String(body.unidad_compra).trim() || null;
@@ -146,6 +178,13 @@ export async function PATCH(
       patch.tiempo_prep_minutos = Math.floor(body.tiempo_prep_minutos);
     if (body.descripcion !== undefined)
       patch.descripcion = body.descripcion == null ? null : String(body.descripcion).trim() || null;
+    if (body.precio_mayorista !== undefined) patch.precio_mayorista = toNumberOrNull(body.precio_mayorista);
+    if (body.cantidad_minima_mayorista !== undefined) patch.cantidad_minima_mayorista = toNumberOrNull(body.cantidad_minima_mayorista);
+    if (body.precio_distribuidor !== undefined) patch.precio_distribuidor = toNumberOrNull(body.precio_distribuidor);
+    if (body.modo_receta !== undefined) {
+      const mr = body.modo_receta;
+      patch.modo_receta = mr === "produccion_previa" ? "produccion_previa" : "preparado_al_vender";
+    }
 
     if (Object.keys(patch).length === 0) {
       const { data: existing, error: errGet } = await sb
@@ -224,5 +263,43 @@ export async function PATCH(
   } catch (err) {
     console.error("[/api/productos/[id] PATCH] outer", err instanceof Error ? err.message : err);
     return NextResponse.json(errorResponse("No se pudo actualizar el producto."), { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/productos/[id]
+ *
+ * Soft delete: setea activo=false. El producto deja de aparecer en el
+ * listado del ERP y en el sitio publico. NO se borra fisicamente para
+ * preservar integridad con ventas/movimientos historicos. El usuario
+ * puede reactivarlo desde la base si fuera necesario.
+ */
+export async function DELETE(
+  request: NextRequest,
+  ctxParams: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await ctxParams.params;
+    const ctx = await getTenantSupabaseFromAuth(request);
+    if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
+    const empresaId = ctx.auth.empresa_id;
+
+    const upd = await ctx.supabase
+      .from("productos")
+      .update({ activo: false })
+      .eq("empresa_id", empresaId)
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+
+    if (upd.error) {
+      console.error("[/api/productos/[id] DELETE]", upd.error.message);
+      return NextResponse.json(errorResponse("No se pudo eliminar el producto."), { status: 500 });
+    }
+    if (!upd.data) return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
+    return NextResponse.json(successResponse({ id }));
+  } catch (err) {
+    console.error("[/api/productos/[id] DELETE] outer", err instanceof Error ? err.message : err);
+    return NextResponse.json(errorResponse("No se pudo eliminar el producto."), { status: 500 });
   }
 }

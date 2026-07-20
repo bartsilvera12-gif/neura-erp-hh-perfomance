@@ -1,5 +1,5 @@
 /**
- * Script para verificar que el usuario de prueba ve los módulos correctos.
+ * Script para verificar que kevin.gomez@ferreteria.com ve los módulos correctos.
  * 1. Consulta la DB para obtener los módulos esperados de la empresa
  * 2. Inicia sesión con Playwright y verifica los módulos mostrados en el Sidebar
  */
@@ -11,19 +11,9 @@ import { config } from "dotenv";
 // Cargar .env.local
 config({ path: path.join(process.cwd(), ".env.local") });
 
-/**
- * Usuario de prueba. Se lee del entorno: no versionar credenciales.
- * Definir en `.env.local`: TEST_USER_EMAIL, TEST_USER_PASSWORD.
- */
-const EMAIL = process.env.TEST_USER_EMAIL ?? "";
+const EMAIL = "kevin.gomez@ferreteria.com";
 const PASSWORD = process.env.TEST_USER_PASSWORD ?? "";
-const BASE_URL = process.env.TEST_BASE_URL ?? "http://localhost:3000";
-
-if (!EMAIL || !PASSWORD) {
-  throw new Error(
-    "Faltan TEST_USER_EMAIL y/o TEST_USER_PASSWORD en el entorno (.env.local)."
-  );
-}
+const BASE_URL = "http://localhost:3000";
 
 async function getModulosEsperados() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -105,7 +95,7 @@ async function testConPlaywright() {
 }
 
 async function main() {
-  console.log("=== Verificación de módulos para el usuario de prueba ===\n");
+  console.log("=== Verificación de módulos para kevin.gomez@ferreteria.com ===\n");
 
   const esperados = await getModulosEsperados();
   if (esperados.error) {

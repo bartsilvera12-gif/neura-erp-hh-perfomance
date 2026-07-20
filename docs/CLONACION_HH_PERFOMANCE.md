@@ -12,8 +12,8 @@ Fecha: 2026-07-20
 | | |
 |---|---|
 | Repositorio fuente | `bartsilvera12-gif/ferreteria-republica-erp` |
-| Rama fuente | `perf/optimization-batch-1` |
-| Commit baseline | `9a4276a7240ed9175565252724b53e37770cc084` |
+| Rama fuente | `main` |
+| Commit baseline | `1c3408b05d989fe879fa436a5b5bef2aa5218b9a` |
 | Repositorio destino | `bartsilvera12-gif/neura-erp-hh-perfomance` |
 | Rama destino | `main` (historial Git nuevo e independiente) |
 | Schema fuente detectado | `ferreteriarepublica` |
@@ -261,7 +261,7 @@ escribir credenciales a disco.
    conservaron: son nombre de plataforma y documentación interna, no resolución
    de schema. Cambiarlos habría sido un cambio visual no solicitado.
 6. La estructura clonada corresponde al **estado actual** del schema fuente, que
-   está más avanzado que la rama `perf/optimization-batch-1` (p. ej. tablas de
+   está más avanzado que la rama `main` (p. ej. tablas de
    `devoluciones_venta`). Es un superset compatible.
 
 ## 12. Datos pendientes de HH Performance

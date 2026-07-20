@@ -6,7 +6,6 @@ import { ConversacionesClient, type ConversacionesInitialOperationalPresence } f
 import { SUPABASE_APP_SCHEMA } from "@/lib/supabase/schema";
 
 export default async function ConversacionesInboxPage() {
-  // Instancia monocliente: el fallback debe ser el schema propio, nunca el de otro tenant.
   let chatDataSchema = SUPABASE_APP_SCHEMA;
   try {
     chatDataSchema = await getChatDataSchemaForCurrentUser();

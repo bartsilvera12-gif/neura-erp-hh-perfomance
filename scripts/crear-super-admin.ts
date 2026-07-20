@@ -8,19 +8,10 @@ import { createErpServiceClient } from "./erp-db";
 
 config({ path: path.join(process.cwd(), ".env.local") });
 
-/**
- * Credenciales del super admin. Se leen del entorno: no deben versionarse.
- * Definir en `.env.local`: SUPER_ADMIN_EMAIL, SUPER_ADMIN_PASSWORD, SUPER_ADMIN_NOMBRE.
- */
-const EMAIL = process.env.SUPER_ADMIN_EMAIL ?? "";
+/** Debe coincidir con el correo en Supabase Auth (super admin global del ERP). */
+const EMAIL = "neuratomations@gmail.com";
 const PASSWORD = process.env.SUPER_ADMIN_PASSWORD ?? "";
-const NOMBRE = process.env.SUPER_ADMIN_NOMBRE ?? "Admin Sistema";
-
-if (!EMAIL || !PASSWORD) {
-  throw new Error(
-    "Faltan SUPER_ADMIN_EMAIL y/o SUPER_ADMIN_PASSWORD en el entorno (.env.local)."
-  );
-}
+const NOMBRE = "Admin Sistema";
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

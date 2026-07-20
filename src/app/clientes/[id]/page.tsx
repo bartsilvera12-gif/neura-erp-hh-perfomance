@@ -58,10 +58,17 @@ import {
   type TributarioFormState,
 } from "@/components/clientes/ClientePerfilTributarioForm";
 import { ClienteDatosSifenReceptorForm } from "@/components/clientes/ClienteDatosSifenReceptorForm";
+import { NEURA_CLIENT_SCHEMA } from "@/lib/supabase/schema";
+
+/** Instancias monocliente con formulario/detalle de clientes simplificado (sin campos SaaS/Neura). */
+const SIMPLE_CLIENTE =
+  NEURA_CLIENT_SCHEMA === "reservacaacupe" ||
+  NEURA_CLIENT_SCHEMA === "ferreteriarepublica" ||
+  NEURA_CLIENT_SCHEMA === "hhperfomance";
 // ── Estilos ────────────────────────────────────────────────────────────────────
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
+  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#4FAEB2] focus:outline-none bg-white text-sm";
 const labelClass = "block text-xs font-medium text-slate-500 mb-1";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -73,6 +80,17 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 // ── Tipos de pestaña ──────────────────────────────────────────────────────────
+
+/** Una venta a crédito del cliente (cuentas_por_cobrar, generada desde Caja). */
+type CuentaCredito = {
+  id: string;
+  numero_venta: string | null;
+  fecha_emision: string;
+  fecha_vencimiento: string | null;
+  total: number;
+  saldo: number;
+  estado: string;
+};
 
 type TabId = "informacion" | "estado_cuenta" | "suscripciones" | "marketing" | "proyectos" | "actividad" | "notas";
 
@@ -87,6 +105,28 @@ const TABS: { id: TabId; label: string; showWhen?: (c: Cliente) => boolean }[] =
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtGs(v: number) {
+  return `Gs. ${Math.round(v || 0).toLocaleString("es-PY")}`;
+}
+/** Fecha corta a partir de un ISO o 'YYYY-MM-DD' (sin desfase de zona). */
+function fmtFechaCorta(iso: string | null) {
+  if (!iso) return "—";
+  const s = String(iso).slice(0, 10);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+}
+
+/** Mini card de totales del bloque "Ventas a crédito". */
+function MiniCredito({ label, value, tone }: { label: string; value: string; tone?: "emerald" | "turquesa" }) {
+  const cls = tone === "emerald" ? "text-emerald-700" : tone === "turquesa" ? "text-[#3F8E91]" : "text-slate-800";
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className={`mt-0.5 text-sm font-bold tabular-nums ${cls}`}>{value}</p>
+    </div>
+  );
+}
 
 function formatFecha(iso: string) {
   try {
@@ -122,7 +162,7 @@ function ClienteFichaSkeleton() {
       <div className={`h-3 w-28 ${bar}`} aria-hidden />
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="h-40 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 animate-pulse" aria-hidden />
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 divide-x divide-gray-100 border-t border-gray-100">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 divide-y sm:divide-y-0 sm:divide-x divide-gray-100 border-t border-gray-100">
           {Array.from({ length: 7 }).map((_, i) => (
             <div key={i} className="px-5 py-3 space-y-2">
               <div className={`h-2.5 w-16 ${bar}`} />
@@ -204,6 +244,7 @@ export default function ClienteDetailPage() {
     vendedor_usuario_id:   "",
     tipo_servicio_cliente: "" as string,
     estado:                "activo" as Cliente["estado"],
+    usa_nota_remision:     false,
     sifen_receptor_manual: false,
     sifen_receptor_naturaleza: "" as string,
     sifen_ti_ope: "" as string,
@@ -257,6 +298,7 @@ export default function ClienteDetailPage() {
 
   // Estado de cuenta
   const [facturas, setFacturas] = useState<Factura[]>([]);
+  const [cuentasCredito, setCuentasCredito] = useState<CuentaCredito[]>([]);
   const [modalPago, setModalPago] = useState(false);
   const [facturaPago, setFacturaPago] = useState<Factura | null>(null);
   const [formPago, setFormPago] = useState({ factura_id: "" as string, monto: "", fecha_pago: "", metodo_pago: "efectivo" as const, referencia: "" });
@@ -360,6 +402,7 @@ export default function ClienteDetailPage() {
         vendedor_usuario_id:  c.vendedor_usuario_id ?? "",
         tipo_servicio_cliente: c.tipo_servicio_cliente ?? "",
         estado:               c.estado,
+        usa_nota_remision:    c.usa_nota_remision === true,
         sifen_receptor_manual: Boolean(c.sifen_receptor_manual),
         sifen_receptor_naturaleza: c.sifen_receptor_naturaleza ?? "",
         sifen_ti_ope: c.sifen_ti_ope != null ? String(c.sifen_ti_ope) : "",
@@ -490,6 +533,17 @@ export default function ClienteDetailPage() {
       getFacturas(id).then(setFacturas);
       getSuscripciones(id).then(setSuscripciones);
       getPlanes().then(setPlanes);
+    }
+    // Ventas a crédito del cliente (cuentas por cobrar). Son las que genera una
+    // venta a crédito en Caja; no son las facturas SaaS de arriba.
+    if (activeTab === "estado_cuenta") {
+      fetchWithSupabaseSession(`/api/cobros/cuentas?cliente_id=${encodeURIComponent(id)}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((j) => {
+          const arr = (j?.data?.cuentas ?? j?.data ?? []) as CuentaCredito[];
+          setCuentasCredito(Array.isArray(arr) ? arr : []);
+        })
+        .catch(() => setCuentasCredito([]));
     }
   }, [id, activeTab]);
 
@@ -641,6 +695,7 @@ export default function ClienteDetailPage() {
         vendedor_usuario_id: form.vendedor_usuario_id.trim() || null,
         tipo_servicio_cliente: tipoTs || null,
         estado:              form.estado,
+        usa_nota_remision:   form.usa_nota_remision,
         ...sifenManualPayload,
       });
     } catch (err) {
@@ -909,7 +964,7 @@ export default function ClienteDetailPage() {
         <h1 className="text-xl font-bold text-gray-800">No se pudo cargar el cliente</h1>
         <p className="text-sm text-red-600">{errorCarga}</p>
         <p className="text-xs font-mono text-gray-400 break-all">ID: {id}</p>
-        <button type="button" onClick={() => void cargar()} className="text-sm text-[#0EA5E9] underline">
+        <button type="button" onClick={() => void cargar()} className="text-sm text-[#3F8E91] underline">
           Reintentar
         </button>
         <button type="button" onClick={() => router.push("/clientes")} className="ml-4 text-sm text-gray-500 underline">
@@ -946,54 +1001,58 @@ export default function ClienteDetailPage() {
 
       {/* ── Panel resumen ─────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] px-6 py-5">
-          <div className="flex items-start justify-between gap-4">
+        {/* Franja de acento (marca) */}
+        <div className="h-1.5 bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91]" />
+
+        <div className="px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Avatar */}
-              <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold text-white shrink-0 ${
-                cliente.tipo_cliente === "empresa" ? "bg-blue-500/80" : "bg-violet-500/80"
-              }`}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#E5F4F4] text-lg font-bold text-[#3F8E91] ring-1 ring-[#4FAEB2]/30">
                 {nombre.slice(0, 2).toUpperCase()}
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-white leading-tight">{nombre}</h1>
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                  <span className="text-gray-300 font-mono text-xs">{cliente.codigo_cliente}</span>
-                  {cliente.ruc && (
-                    <span className="text-gray-300 text-xs">RUC: {cliente.ruc}</span>
-                  )}
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-xl font-bold leading-tight text-slate-900">{nombre}</h1>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
                     cliente.estado === "activo"
-                      ? "bg-green-500/20 text-green-300"
-                      : "bg-gray-500/30 text-gray-300"
+                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                      : "bg-slate-100 text-slate-500 ring-1 ring-slate-200"
                   }`}>
-                    ● {cliente.estado === "activo" ? "Activo" : "Inactivo"}
+                    <span className={`h-1.5 w-1.5 rounded-full ${cliente.estado === "activo" ? "bg-emerald-500" : "bg-slate-400"}`} />
+                    {cliente.estado === "activo" ? "Activo" : "Inactivo"}
+                  </span>
+                  <span className="inline-flex items-center rounded-full bg-[#E5F4F4] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#3F8E91]">
+                    {cliente.tipo_cliente === "empresa" ? "Empresa" : "Persona"}
                   </span>
                   {cliente.perfil_tributario_activo && (
-                    <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-white/15 text-white border border-white/25">
+                    <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700 ring-1 ring-violet-200">
                       Tributario
                     </span>
                   )}
-                  <span className="text-xs text-gray-400">
-                    Cliente desde {formatFecha(cliente.created_at)}
-                  </span>
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                  <span className="font-mono text-slate-600">{cliente.codigo_cliente}</span>
+                  {cliente.ruc && <span><span className="text-slate-400">RUC/CI:</span> <span className="font-medium text-slate-700">{cliente.ruc}</span></span>}
+                  <span>Cliente desde {formatFecha(cliente.created_at)}</span>
                 </div>
               </div>
             </div>
-            {/* Acciones del header */}
-            <div className="flex items-center gap-2 shrink-0">
+
+            {/* Acciones secundarias */}
+            <div className="flex shrink-0 items-center gap-2">
               {cliente.estado === "activo" ? (
                 esAdmin ? (
                   <button
                     onClick={abrirModalBajaOperativa}
-                    className="text-xs font-medium border border-amber-400/60 text-amber-200 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
                   >
-                    Dar de baja cliente
+                    Dar de baja
                   </button>
                 ) : (
                   <button
                     onClick={handleToggleEstado}
-                    className="text-xs font-medium border border-white/20 text-white/80 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
                   >
                     Desactivar
                   </button>
@@ -1001,7 +1060,7 @@ export default function ClienteDetailPage() {
               ) : (
                 <button
                   onClick={handleToggleEstado}
-                  className="text-xs font-medium border border-white/20 text-white/80 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100"
                 >
                   Reactivar
                 </button>
@@ -1010,10 +1069,10 @@ export default function ClienteDetailPage() {
                 <button
                   type="button"
                   onClick={() => void abrirModalEliminar()}
-                  className="text-red-200 hover:text-white hover:bg-red-900/40 border border-red-400/40 flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors text-xs font-medium"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
                   title="Eliminar cliente (baja lógica)"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0" aria-hidden>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0" aria-hidden>
                     <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
                   </svg>
                   Eliminar
@@ -1021,7 +1080,33 @@ export default function ClienteDetailPage() {
               )}
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-white/15 flex flex-wrap gap-2">
+
+          {/* Acciones principales */}
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              onClick={abrirRegistrarPago}
+              className="rounded-lg bg-[#4FAEB2] px-4 py-2 text-sm font-bold text-white shadow-sm shadow-[#4FAEB2]/30 transition-colors hover:bg-[#3F8E91]"
+            >
+              Registrar pago
+            </button>
+            <Link
+              href={`/clientes/${id}/estado-cuenta`}
+              className="rounded-lg border border-[#4FAEB2]/40 bg-[#4FAEB2]/[0.08] px-4 py-2 text-sm font-semibold text-[#3F8E91] transition-colors hover:bg-[#4FAEB2]/[0.16]"
+            >
+              Estado de cuenta
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setFormFacturaContado({ monto: "", descripcion: "Venta al contado", iva_tipo: "iva_10" });
+                setErrorFacturaContado(null);
+                setModalFacturaContado(true);
+              }}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+            >
+              Factura al contado
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -1036,33 +1121,15 @@ export default function ClienteDetailPage() {
                 });
                 setModalSuscripcion(true);
               }}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
             >
               Nueva suscripción
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setFormFacturaContado({ monto: "", descripcion: "Venta al contado", iva_tipo: "iva_10" });
-                setErrorFacturaContado(null);
-                setModalFacturaContado(true);
-              }}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              Factura al contado
-            </button>
-            <button
-              type="button"
-              onClick={abrirRegistrarPago}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              Registrar pago
             </button>
           </div>
         </div>
 
         {/* Estadísticas rápidas */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 divide-x divide-gray-100 border-t border-gray-100">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 divide-y sm:divide-y-0 sm:divide-x divide-gray-100 border-t border-gray-100">
           {(
             [
               { label: "Origen", value: cliente.origen },
@@ -1099,7 +1166,9 @@ export default function ClienteDetailPage() {
               },
               { label: "Creado por", value: cliente.created_by_nombre?.trim() || "—" },
             ] as { label: string; value: ReactNode }[]
-          ).map((item) => (
+          )
+            .filter((item) => !SIMPLE_CLIENTE || !["Origen", "Tipo servicio", "Plan activo", "Vendedor"].includes(item.label))
+            .map((item) => (
             <div key={item.label} className="px-5 py-3">
               <p className="text-xs text-gray-400">{item.label}</p>
               <div className="text-sm font-semibold text-gray-700 mt-0.5">{item.value}</div>
@@ -1462,7 +1531,7 @@ export default function ClienteDetailPage() {
                         type="button"
                         onClick={() => setForm((prev) => ({ ...prev, tipo_cliente: t }))}
                         className={`px-4 py-2 text-sm font-medium transition-colors ${
-                          form.tipo_cliente === t ? "bg-[#0EA5E9] text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                          form.tipo_cliente === t ? "bg-[#4FAEB2] text-white" : "bg-white text-slate-600 hover:bg-slate-50"
                         }`}
                       >
                         {t === "empresa" ? "Empresa" : "Persona"}
@@ -1471,6 +1540,7 @@ export default function ClienteDetailPage() {
                   </div>
                 </div>
 
+                {!SIMPLE_CLIENTE && (
                 <div>
                   <label className={labelClass}>Tipo de servicio</label>
                   <select
@@ -1488,6 +1558,7 @@ export default function ClienteDetailPage() {
                     ))}
                   </select>
                 </div>
+                )}
 
                 {form.tipo_cliente === "empresa" && (
                   <div>
@@ -1543,6 +1614,17 @@ export default function ClienteDetailPage() {
                   <input type="text" name="direccion" value={form.direccion} onChange={handleChange} className={inputClass} />
                 </div>
 
+                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.usa_nota_remision}
+                    onChange={(e) => setForm((p) => ({ ...p, usa_nota_remision: e.target.checked }))}
+                    className="h-4 w-4 rounded border-slate-300 text-[#3F8E91] focus:ring-[#4FAEB2]"
+                  />
+                  Usa nota de remisión
+                  <span className="text-xs text-slate-400">(se generará junto al ticket al venderle)</span>
+                </label>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className={labelClass}>Ciudad</label>
@@ -1554,6 +1636,7 @@ export default function ClienteDetailPage() {
                   </div>
                 </div>
 
+                {!SIMPLE_CLIENTE && (
                 <ClienteDatosSifenReceptorForm
                   value={{
                     sifen_receptor_manual: form.sifen_receptor_manual,
@@ -1620,6 +1703,7 @@ export default function ClienteDetailPage() {
                     });
                   }}
                 />
+                )}
               </section>
 
               {/* Digital */}
@@ -1645,7 +1729,7 @@ export default function ClienteDetailPage() {
               <section className="space-y-4">
                 <SectionTitle>Datos comerciales</SectionTitle>
 
-                {suscripcionActiva && (
+                {!SIMPLE_CLIENTE && suscripcionActiva && (
                   <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/90">
                     <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">Plan mensual activo</p>
                     <p className="text-sm text-emerald-950 mt-1">
@@ -1680,7 +1764,7 @@ export default function ClienteDetailPage() {
                       <option value="30 DÍAS">30 días</option>
                       <option value="60 DÍAS">60 días</option>
                       <option value="90 DÍAS">90 días</option>
-                      <option value="MENSUAL">Mensual</option>
+                      {!SIMPLE_CLIENTE && <option value="MENSUAL">Mensual</option>}
                     </select>
                   </div>
                   <div>
@@ -1701,6 +1785,7 @@ export default function ClienteDetailPage() {
                   </div>
                 </div>
 
+                {!SIMPLE_CLIENTE && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className={labelClass}>Vendedor responsable (usuario ERP)</label>
@@ -1728,6 +1813,7 @@ export default function ClienteDetailPage() {
                     <input type="text" name="vendedor_asignado" value={form.vendedor_asignado} onChange={handleChange} className={`${inputClass} uppercase`} />
                   </div>
                 </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -1790,7 +1876,7 @@ export default function ClienteDetailPage() {
                 )}
 
                 {/* Campos de suscripción (solo cuando condicion_pago = MENSUAL y no tiene suscripciones) */}
-                {form.condicion_pago === "MENSUAL" && (
+                {!SIMPLE_CLIENTE && form.condicion_pago === "MENSUAL" && (
                   <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
                     <SectionTitle>Configuración de suscripción</SectionTitle>
                     {suscripciones.length > 0 ? (
@@ -1917,7 +2003,7 @@ export default function ClienteDetailPage() {
               <div className="flex gap-3">
                 <button
                   type="submit"
-                  className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm active:scale-95"
+                  className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm active:scale-95"
                 >
                   Guardar cambios
                 </button>
@@ -1927,7 +2013,73 @@ export default function ClienteDetailPage() {
 
           {/* ── ESTADO DE CUENTA ─────────────────────────────────────────── */}
           {activeTab === "estado_cuenta" && (
-            <div className="space-y-4">
+            <div className="space-y-8">
+              {/* Ventas a crédito (cuentas por cobrar) — lo que genera Caja al vender a crédito */}
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <SectionTitle>Ventas a crédito</SectionTitle>
+                  <Link
+                    href={`/clientes/${id}/estado-cuenta`}
+                    className="rounded-lg bg-[#4FAEB2] px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-[#3F8E91]"
+                  >
+                    Estado de cuenta / Registrar cobro
+                  </Link>
+                </div>
+                {cuentasCredito.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-gray-400">
+                    Este cliente no tiene ventas a crédito registradas.
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-3">
+                      <MiniCredito label="Total a crédito" value={fmtGs(cuentasCredito.reduce((s, c) => s + Number(c.total || 0), 0))} />
+                      <MiniCredito label="Cobrado" value={fmtGs(cuentasCredito.reduce((s, c) => s + (Number(c.total || 0) - Number(c.saldo || 0)), 0))} tone="emerald" />
+                      <MiniCredito label="Saldo pendiente" value={fmtGs(cuentasCredito.reduce((s, c) => s + Number(c.saldo || 0), 0))} tone="turquesa" />
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border border-slate-200">
+                      <table className="w-full text-sm">
+                        <thead className="border-b-2 border-[#4FAEB2]/40 bg-[#E5F4F4]">
+                          <tr>
+                            {["N° Venta", "Fecha", "Vencimiento", "Total", "Saldo", "Estado"].map((h, i) => (
+                              <th key={h} className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-[#3F8E91] ${i === 3 || i === 4 ? "text-right" : i === 5 ? "text-center" : "text-left"}`}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {cuentasCredito.map((c) => {
+                            const venc = c.fecha_vencimiento ? new Date(`${String(c.fecha_vencimiento).slice(0, 10)}T00:00:00`) : null;
+                            const vencida = !!venc && Number(c.saldo) > 0 && venc.getTime() < Date.now();
+                            return (
+                              <tr key={c.id} className="hover:bg-[#4FAEB2]/5">
+                                <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700">{c.numero_venta ?? "—"}</td>
+                                <td className="px-4 py-2.5 text-xs text-slate-600">{fmtFechaCorta(c.fecha_emision)}</td>
+                                <td className={`px-4 py-2.5 text-xs ${vencida ? "font-semibold text-red-600" : "text-slate-600"}`}>
+                                  {fmtFechaCorta(c.fecha_vencimiento)}{vencida ? " (vencida)" : ""}
+                                </td>
+                                <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtGs(Number(c.total))}</td>
+                                <td className="px-4 py-2.5 text-right tabular-nums font-bold text-slate-900">{fmtGs(Number(c.saldo))}</td>
+                                <td className="px-4 py-2.5 text-center">
+                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    Number(c.saldo) <= 0
+                                      ? "bg-[var(--badge-success-bg)] text-[var(--badge-success-text)]"
+                                      : vencida
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-[var(--badge-warning-bg)] text-[var(--badge-warning-text)]"
+                                  }`}>
+                                    {Number(c.saldo) <= 0 ? "Pagada" : vencida ? "Vencida" : "Pendiente"}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Facturas SaaS (suscripciones / facturación mensual) */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <SectionTitle>Facturas del cliente</SectionTitle>
                 <div className="flex flex-wrap gap-2">
@@ -1957,7 +2109,7 @@ export default function ClienteDetailPage() {
                       });
                       setModalPago(true);
                     }}
-                    className="text-sm font-medium text-[#0EA5E9] hover:text-[#0284C7]"
+                    className="text-sm font-medium text-[#3F8E91] hover:text-[#4FAEB2]"
                   >
                     Registrar pago
                   </button>
@@ -1980,7 +2132,7 @@ export default function ClienteDetailPage() {
                       {facturas.map((f) => (
                         <tr key={f.id} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-mono text-slate-800">
-                            <Link href={`/facturas/${f.id}`} className="text-[#0EA5E9] hover:underline font-semibold">
+                            <Link href={`/facturas/${f.id}`} className="text-[#3F8E91] hover:underline font-semibold">
                               {f.numero_factura}
                             </Link>
                           </td>
@@ -2007,14 +2159,14 @@ export default function ClienteDetailPage() {
                               <button
                                 type="button"
                                 onClick={() => { setFacturaPago(f); setFormPago({ factura_id: f.id, monto: String(f.saldo), fecha_pago: new Date().toISOString().slice(0, 10), metodo_pago: "efectivo", referencia: "" }); setModalPago(true); }}
-                                className="text-xs font-medium text-[#0EA5E9] hover:underline"
+                                className="text-xs font-medium text-[#3F8E91] hover:underline"
                               >
                                 Registrar pago
                               </button>
                             )}
                             <Link
                               href={`/facturas/${f.id}`}
-                              className="text-xs font-medium text-slate-500 hover:text-[#0EA5E9] hover:underline ml-2"
+                              className="text-xs font-medium text-slate-500 hover:text-[#3F8E91] hover:underline ml-2"
                             >
                               Ver
                             </Link>
@@ -2036,7 +2188,7 @@ export default function ClienteDetailPage() {
                 <button
                   type="button"
                   onClick={() => { setFormSusc({ plan_id: "", precio: "", fecha_inicio: new Date().toISOString().slice(0, 10), duracion_meses: "12", dia_facturacion: "1", dia_vencimiento: "10", generar_factura_este_mes: false }); setModalSuscripcion(true); }}
-                  className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium"
+                  className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium"
                 >
                   Nueva suscripción
                 </button>
@@ -2091,7 +2243,7 @@ export default function ClienteDetailPage() {
                     setErrorTarea(null);
                     setModalNuevaTarea(true);
                   }}
-                  className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium"
+                  className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium"
                 >
                   Nueva tarea
                 </button>
@@ -2184,12 +2336,12 @@ export default function ClienteDetailPage() {
                   }}
                   rows={3}
                   placeholder="Escribí una nota interna (Ctrl+Enter para guardar)..."
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm resize-none mb-3"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#4FAEB2] focus:outline-none bg-white text-sm resize-none mb-3"
                 />
 <button
                 type="submit"
                 disabled={!nuevaNota.trim() || guardandoNota}
-                className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+                className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
               >
                   Agregar nota
                 </button>
@@ -2290,7 +2442,7 @@ export default function ClienteDetailPage() {
                 <button
                   type="submit"
                   disabled={guardandoFacturaContado || !formFacturaContado.monto.trim()}
-                  className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-40"
+                  className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-40"
                 >
                   {guardandoFacturaContado ? "Guardando…" : "Emitir factura"}
                 </button>
@@ -2368,7 +2520,7 @@ export default function ClienteDetailPage() {
                 <label htmlFor="gen_fact" className="text-sm text-slate-600">Emitir factura este mes</label>
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={guardandoSusc} className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                <button type="submit" disabled={guardandoSusc} className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
                   Guardar
                 </button>
                 <button type="button" onClick={() => setModalSuscripcion(false)} className="border border-slate-200 px-4 py-2 rounded-lg text-sm hover:bg-slate-50">
@@ -2446,7 +2598,7 @@ export default function ClienteDetailPage() {
                 <p className="text-sm text-red-600">{errorTarea}</p>
               )}
               <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={guardandoTarea} className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                <button type="submit" disabled={guardandoTarea} className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
                   Guardar
                 </button>
                 <button type="button" onClick={() => setModalNuevaTarea(false)} className="border border-slate-200 px-4 py-2 rounded-lg text-sm hover:bg-slate-50">
@@ -2522,7 +2674,7 @@ export default function ClienteDetailPage() {
                 <input type="text" value={formPago.referencia} onChange={(e) => setFormPago((p) => ({ ...p, referencia: e.target.value }))} className={inputClass} placeholder="Nº de comprobante" />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={guardandoPago} className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                <button type="submit" disabled={guardandoPago} className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
                   Guardar
                 </button>
                 <button type="button" onClick={() => setModalPago(false)} className="border border-slate-200 px-4 py-2 rounded-lg text-sm hover:bg-slate-50">

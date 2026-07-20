@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
+// MobileDashboard se renderiza solo en mobile (md:hidden). El dashboard desktop
+// que vive en este mismo archivo queda intacto.
+import MobileDashboard from "@/app/_components/MobileDashboard";
+import CobranzasResumenCards from "@/components/cobros/CobranzasResumenCards";
 import { getConfig } from "@/lib/config/storage";
 import { getUsuarios } from "@/lib/usuarios/storage";
 import type { ConfigGlobal } from "@/lib/config/types";
@@ -39,21 +44,21 @@ import {
   isDashboardTabSlug,
   type DashboardTabSlug,
 } from "@/lib/dashboard/resolve-effective-dashboard-views";
-// NOTA DE PERFORMANCE: recharts pesa ~90 KB gzipped y entra al bundle inicial.
-// No se puede usar next/dynamic directo en estos componentes porque LineChart
-// hace introspeccion de children por tipo (rompe si los envolves en dynamic()).
-// TODO: extraer el chart de la seccion financiera a un archivo aparte
-// (p.ej. src/app/_components/ChartCobradoPorDia.tsx) y dynamic-importar ESE archivo.
-// Eso saca recharts del bundle inicial sin romper la introspeccion.
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+// recharts (~90 KB gzipped) extraido a archivo aparte y dynamic-importado.
+// Razones:
+//  - El chart solo se ve cuando el user entra al tab "Financiero" del dashboard.
+//  - LineChart hace introspeccion de children por tipo — por eso NO se puede
+//    dynamic() directo a los componentes individuales (rompe los ejes).
+//    Solucion: dynamic() al chart completo como unidad cerrada.
+//  - ssr:false porque el chart no aporta SEO y evita un round-trip server.
+//  - loading: placeholder con la misma altura para que no haya layout shift.
+const ChartCobradoPorDia = dynamic(
+  () => import("@/app/_components/ChartCobradoPorDia"),
+  {
+    ssr: false,
+    loading: () => <div className="h-full w-full animate-pulse rounded-lg bg-slate-100" />,
+  },
+);
 
 // ── ZENTRA (solo dashboard / esta página) ─────────────────────────────────────
 // Paleta turquesa #4FAEB2 (rediseño 2026). Shell BLANCO con detalles turquesa
@@ -606,7 +611,12 @@ function etiquetaPlanServicioCliente(
   return "—";
 }
 
-function DashComercial({
+// memo evita re-render de este sub-dashboard cuando cambia algo en el padre
+// que no afecta a sus props (ej: usuario abre dropdown del header, cambia tab,
+// se actualizan KPIs de otra seccion). Los datos del comercial son grandes
+// (prospectos+clientes+facturas+notasCredito+suscripciones) y los useMemo
+// internos solo se cachean si el componente no re-renderea.
+const DashComercial = memo(function DashComercial({
   prospectos,
   clientes,
   mapNombreTipoServicio,
@@ -971,7 +981,7 @@ function DashComercial({
       </motion.div>
     </div>
   );
-}
+});
 
 // ── Dashboard Financiero ──────────────────────────────────────────────────────
 
@@ -1042,7 +1052,9 @@ function composicionFacturacionPorModalidad(facturasPeriodo: FacturaRaw[]) {
   };
 }
 
-function DashFinanciero({
+// memo: el sub-dashboard financiero hace muchos useMemo internos sobre facturas
+// y pagos. Sin memo, cualquier render del padre (ej: cambio de tab) los invalidaba.
+const DashFinanciero = memo(function DashFinanciero({
   facturas, pagos, clientes, ventas, periodo, config, mapNombreTipoServicio,
 }: {
   facturas:  FacturaRaw[];
@@ -1351,59 +1363,13 @@ function DashFinanciero({
           <p className="mt-6 text-sm text-slate-500">Sin rango de fechas válido.</p>
         ) : (
           <div className="mt-5 h-[300px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={cobradoPorDiaSerie} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
-                <CartesianGrid stroke="#e2e8f0" vertical={false} />
-                <XAxis
-                  dataKey="fecha"
-                  tick={{ fill: "#64748b", fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={{ stroke: "#cbd5e1" }}
-                  tickFormatter={(ymd: string) => {
-                    if (!ymd || ymd.length < 10) return ymd;
-                    return `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}`;
-                  }}
-                  minTickGap={28}
-                />
-                <YAxis
-                  tick={{ fill: "#64748b", fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={{ stroke: "#cbd5e1" }}
-                  tickFormatter={(v: number) => formatGsM(Number(v))}
-                  width={52}
-                />
-                <Tooltip
-                  cursor={{ stroke: "rgba(37,99,235,0.25)", strokeWidth: 1 }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const row = payload[0].payload as {
-                      fecha: string;
-                      monto: number;
-                      count: number;
-                    };
-                    return (
-                      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 shadow-lg">
-                        <p className="font-medium text-slate-500">{formatFecha(row.fecha)}</p>
-                        <p className="mt-1.5 text-sm font-semibold tabular-nums text-slate-900">
-                          Gs. {formatGs(row.monto)}
-                        </p>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                          {row.count} pago{row.count === 1 ? "" : "s"}
-                        </p>
-                      </div>
-                    );
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="monto"
-                  stroke={finAccent}
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 5, fill: finAccent, stroke: "#fff", strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <ChartCobradoPorDia
+              data={cobradoPorDiaSerie}
+              accentColor={finAccent}
+              formatGs={formatGs}
+              formatGsM={formatGsM}
+              formatFecha={formatFecha}
+            />
           </div>
         )}
       </div>
@@ -1605,11 +1571,13 @@ function DashFinanciero({
       </div>
     </div>
   );
-}
+});
 
 // ── Dashboard Inventario ─────────────────────────────────────────────────────
 
-function DashInventario({
+// memo: dashboard de inventario hace filter/reduce sobre productos en cada render.
+// Sin memo, cualquier cambio en el padre re-ejecutaba esos calculos.
+const DashInventario = memo(function DashInventario({
   productos,
   compras,
 }: {
@@ -1652,27 +1620,31 @@ function DashInventario({
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon="📦" label="Productos totales"      value={String(totalProductos)} color="text-[#0EA5E9]" variation={4} />
-        <KpiCard icon="🔢" label="Stock total (unidades)" value={formatGs(totalUnidades)} color="text-[#0EA5E9]" />
+        <KpiCard icon="📦" label="Productos totales"      value={String(totalProductos)} color="text-[#3F8E91]" variation={4} />
+        <KpiCard icon="🔢" label="Stock total (unidades)" value={formatGs(totalUnidades)} color="text-[#3F8E91]" />
         <KpiCard icon="⚠️" label="Bajo stock mínimo"      value={String(bajosStock)}
           sub={bajosStock > 0 ? "requieren reposición" : "todo en orden"}
-          color={bajosStock > 0 ? "text-red-600" : "text-[#0EA5E9]"}
+          color={bajosStock > 0 ? "text-red-600" : "text-[#3F8E91]"}
           variation={bajosStock > 0 ? -2 : undefined} />
-        <KpiCard icon="💎" label="Valor del inventario"   value={`Gs. ${formatGsFull(valorTotal)}`} color="text-[#0EA5E9]" variation={12} />
+        <KpiCard icon="💎" label="Valor del inventario"   value={`Gs. ${formatGsFull(valorTotal)}`} color="text-[#3F8E91]" variation={12} />
       </div>
 
       {/* Donut + Críticos */}
       <div className="grid grid-cols-3 gap-4">
-        <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Estado del stock</h3>
+        <motion.div whileHover={{ y: -2 }} className="rounded-2xl border border-[#4FAEB2]/30 bg-white p-6 shadow-sm ring-1 ring-[#4FAEB2]/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+          <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-[#4FAEB2]" />
+            Estado del stock
+          </h3>
           <DonutChart segments={[
             { label: "Saludable", value: cntSaludable, color: "#22c55e" },
             { label: "Bajo",      value: cntBajo,      color: "#f59e0b" },
             { label: "Crítico",   value: cntCritico,   color: "#ef4444" },
           ]} centerLabel="productos" />
         </motion.div>
-        <motion.div whileHover={{ y: -2 }} className="col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6 transition-shadow hover:shadow-md">
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
+        <motion.div whileHover={{ y: -2 }} className="col-span-2 rounded-2xl border border-[#4FAEB2]/30 bg-white p-6 shadow-sm ring-1 ring-[#4FAEB2]/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+          <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <span className="inline-block h-3.5 w-1 rounded-full bg-[#4FAEB2]" />
             Productos críticos — stock bajo mínimo
           </h3>
           {criticos.length === 0 ? (
@@ -1680,31 +1652,31 @@ function DashInventario({
               <span>✅</span> Todos los productos tienen stock suficiente.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-[#E5F4F4] border-b-2 border-[#4FAEB2]/40">
                   <tr>
                     <th className="w-10 px-3 py-3">
-                      <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
+                      <input type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-[#4FAEB2]" />
                     </th>
                     {["Producto", "Stock actual", "Stock mín.", "Estado", "Proveedor"].map(h => (
-                      <th key={h} className="text-left text-xs font-semibold text-slate-500 px-3 py-3 uppercase tracking-wide">{h}</th>
+                      <th key={h} className="text-left text-xs font-bold text-[#3F8E91] px-3 py-3 uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-slate-100">
                   {criticos.map(p => (
-                    <tr key={p.id} className={`${p.stock_actual <= 0 ? "bg-red-50/40 dark:bg-red-900/10" : "bg-amber-50/30 dark:bg-amber-900/10"} hover:bg-opacity-80 transition-colors`}>
+                    <tr key={p.id} className={`${p.stock_actual <= 0 ? "bg-red-50/50" : "bg-amber-50/40"} transition-colors hover:bg-[#4FAEB2]/10`}>
                       <td className="px-3 py-2.5">
-                        <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
+                        <input type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-[#4FAEB2]" />
                       </td>
-                      <td className="px-3 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200">{p.nombre}</td>
+                      <td className="px-3 py-2.5 text-xs font-semibold text-slate-900">{p.nombre}</td>
                       <td className="px-3 py-2.5">
-                        <span className={`text-xs font-bold tabular-nums ${p.stock_actual <= 0 ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
+                        <span className={`text-xs font-bold tabular-nums ${p.stock_actual <= 0 ? "text-red-600" : "text-amber-600"}`}>
                           {p.stock_actual} {p.unidad_medida}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 tabular-nums">{p.stock_minimo} {p.unidad_medida}</td>
+                      <td className="px-3 py-2.5 text-xs font-medium text-slate-600 tabular-nums">{p.stock_minimo} {p.unidad_medida}</td>
                       <td className="px-3 py-2.5">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                           p.stock_actual <= 0 ? "bg-[var(--badge-error-bg)] text-[var(--badge-error-text)]" : "bg-[var(--badge-warning-bg)] text-[var(--badge-warning-text)]"
@@ -1712,7 +1684,7 @@ function DashInventario({
                           {p.stock_actual <= 0 ? "Crítico" : "Bajo"}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">{proveedorMap[String(p.id)] ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-xs font-medium text-slate-600">{proveedorMap[String(p.id)] ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1723,36 +1695,37 @@ function DashInventario({
       </div>
 
       {/* Top por valor */}
-      <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6 transition-shadow hover:shadow-md">
-        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
+      <motion.div whileHover={{ y: -2 }} className="rounded-2xl border border-[#4FAEB2]/30 bg-white p-6 shadow-sm ring-1 ring-[#4FAEB2]/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+        <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+          <span className="inline-block h-3.5 w-1 rounded-full bg-[#4FAEB2]" />
           Top productos por valor de inventario
         </h3>
         {topPorValor.length === 0 ? (
           <p className="text-sm text-slate-400 text-center py-6">Sin productos registrados.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-[#E5F4F4] border-b-2 border-[#4FAEB2]/40">
                 <tr>
                   <th className="w-10 px-3 py-3">
-                    <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
+                    <input type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-[#4FAEB2]" />
                   </th>
                   {["Producto", "SKU", "Stock", "Costo promedio", "Valor inventario"].map(h => (
-                    <th key={h} className="text-left text-xs font-semibold text-slate-500 px-3 py-3 uppercase tracking-wide">{h}</th>
+                    <th key={h} className="text-left text-xs font-bold text-[#3F8E91] px-3 py-3 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-100">
                 {topPorValor.map(p => (
-                  <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <tr key={p.id} className="transition-colors hover:bg-[#4FAEB2]/10">
                     <td className="px-3 py-2.5">
-                      <input type="checkbox" className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]" />
+                      <input type="checkbox" className="h-4 w-4 rounded border-slate-300 accent-[#4FAEB2]" />
                     </td>
-                    <td className="px-3 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200">{p.nombre}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">{p.sku}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-slate-700 dark:text-slate-300">{p.stock_actual}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">Gs. {formatGs(p.costo_promedio)}</td>
-                    <td className="px-3 py-2.5 text-xs tabular-nums font-semibold text-slate-800 dark:text-slate-200">Gs. {formatGs(p.valor)}</td>
+                    <td className="px-3 py-2.5 text-xs font-semibold text-slate-900">{p.nombre}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs font-medium text-[#3F8E91]">{p.sku}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums font-medium text-slate-700">{p.stock_actual}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-slate-600">Gs. {formatGs(p.costo_promedio)}</td>
+                    <td className="px-3 py-2.5 text-xs tabular-nums font-bold text-slate-900">Gs. {formatGs(p.valor)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1763,11 +1736,13 @@ function DashInventario({
 
     </div>
   );
-}
+});
 
 // ── Dashboard Ventas ──────────────────────────────────────────────────────────
 
-function DashVentas({
+// memo: ventas + productos pueden ser arrays grandes; los filter/reduce internos
+// solo se cachean si no re-renderea el componente entero.
+const DashVentas = memo(function DashVentas({
   ventas,
   productos,
   periodo,
@@ -1949,7 +1924,7 @@ function DashVentas({
 
     </div>
   );
-}
+});
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
@@ -2197,8 +2172,26 @@ export default function DashboardPage() {
   }
 
   return (
-    <div
-      className="zentra-dashboard-shell space-y-8 rounded-2xl border border-slate-200 px-4 py-8 sm:px-6 md:px-8"
+    <>
+      {/* MOBILE (< md=768px): dashboard rediseñado especialmente para mobile.
+          Touch-first, KPIs apilados, acciones rápidas grandes, alertas, cards
+          en vez de tablas. Layout COMPLETAMENTE distinto al desktop. */}
+      <div className="lg:hidden">
+        <MobileDashboard
+          clientes={clientes}
+          facturas={facturas}
+          pagos={pagos}
+          productos={productos}
+          ventas={ventas}
+          gastos={gastos}
+          notasCredito={notasCredito}
+        />
+      </div>
+
+      {/* DESKTOP (>= md=768px): dashboard original con todos los sub-tabs,
+          gráficos, tablas. Intacto, cero cambios. */}
+      <div
+      className="hidden lg:block zentra-dashboard-shell space-y-8 rounded-2xl border border-slate-200 px-4 py-8 sm:px-6 md:px-8"
       style={{ color: Z.muted }}
     >
       <header className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -2306,15 +2299,18 @@ export default function DashboardPage() {
       )}
 
       {tab === "financiero" && (
-        <DashFinanciero
-          facturas={facturas}
-          pagos={pagos}
-          clientes={clientes}
-          ventas={ventas}
-          periodo={periodo}
-          config={config}
-          mapNombreTipoServicio={mapNombreTipoServicio}
-        />
+        <div className="space-y-6">
+          <CobranzasResumenCards />
+          <DashFinanciero
+            facturas={facturas}
+            pagos={pagos}
+            clientes={clientes}
+            ventas={ventas}
+            periodo={periodo}
+            config={config}
+            mapNombreTipoServicio={mapNombreTipoServicio}
+          />
+        </div>
       )}
 
       {tab === "inventario" && (
@@ -2333,5 +2329,6 @@ export default function DashboardPage() {
       )}
 
     </div>
+    </>
   );
 }

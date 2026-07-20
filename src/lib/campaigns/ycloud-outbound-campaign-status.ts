@@ -12,8 +12,8 @@ import {
 } from "@/lib/chat/webhooks/ycloud-resolve-channel";
 import { refreshCampaignCounters } from "@/lib/campaigns/campaign-job-service";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
-import { getChatServiceClientForEmpresa } from "@/lib/supabase/chat-service-role-empresa";
 import { SUPABASE_APP_SCHEMA } from "@/lib/supabase/schema";
+import { getChatServiceClientForEmpresa } from "@/lib/supabase/chat-service-role-empresa";
 import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 
 export function parseCampaignRecipientExternalId(

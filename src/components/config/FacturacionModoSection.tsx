@@ -63,24 +63,41 @@ export default function FacturacionModoSection() {
   const [okModo, setOkModo] = useAutoClearFlag<string>(1500);
   const [okAuto, setOkAuto] = useAutoClearFlag<string>(1500);
 
-  const cargar = useCallback(async () => {
+  const cargar = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setErrModo(null); setErrAuto(null);
     try {
       const [m, a] = await Promise.all([
-        fetch("/api/configuracion/facturacion-modo", { credentials: "include", cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/configuracion/autoimpresor", { credentials: "include", cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/configuracion/facturacion-modo", {
+          credentials: "include",
+          cache: "no-store",
+          signal,
+        }).then((r) => r.json()),
+        fetch("/api/configuracion/autoimpresor", {
+          credentials: "include",
+          cache: "no-store",
+          signal,
+        }).then((r) => r.json()),
       ]);
+      if (signal?.aborted) return;
       if (m?.success) setModo(m.data.facturacion_modo as FacturacionModo);
       else setErrModo(m?.error ?? "Error al cargar modo");
       if (a?.success) setAuto(a.data.autoimpresor as Autoimpresor);
       else setErrAuto(a?.error ?? "Error al cargar autoimpresor");
     } catch (e) {
+      // AbortError: el caller cambio de tab antes que termine la carga; no toques estado.
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setErrModo(e instanceof Error ? e.message : "Error de red");
-    } finally { setLoading(false); }
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { void cargar(); }, [cargar]);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    void cargar(ctrl.signal);
+    return () => ctrl.abort();
+  }, [cargar]);
 
   async function guardarModo(patch: Partial<FacturacionModo>) {
     if (!modo) return;
@@ -216,10 +233,33 @@ export default function FacturacionModoSection() {
       {/* AUTOIMPRESOR (solo si modo=autoimpresor) */}
       {modo.modo === "autoimpresor" && (
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-baseline justify-between mb-3">
-            <h3 className="text-sm font-semibold text-slate-800">Datos del autoimpresor / timbrado</h3>
-            {okAuto && <span className="text-xs text-emerald-600">{okAuto}</span>}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="flex items-baseline gap-3">
+              <h3 className="text-sm font-semibold text-slate-800">Datos del autoimpresor / timbrado</h3>
+              {okAuto && <span className="text-xs text-emerald-600">{okAuto}</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href="/api/facturacion/factura-preview?w=80"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#4FAEB2]/40 bg-[#4FAEB2]/[0.08] px-3 py-1.5 text-xs font-semibold text-[#3F8E91] transition-colors hover:bg-[#4FAEB2]/[0.16]"
+              >
+                Ver formato de factura (80 mm)
+              </a>
+              <a
+                href="/api/facturacion/factura-preview?w=58"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                58 mm
+              </a>
+            </div>
           </div>
+          <p className="mb-3 text-xs text-slate-500">
+            Abre una vista previa del formato con datos de ejemplo (borrador, sin validez fiscal). No consume numeración. Usa el RUC, timbrado y dirección cargados abajo.
+          </p>
           {errAuto && <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 mb-3">{errAuto}</p>}
 
           <AutoimpresorForm value={auto} onSave={guardarAuto} saving={savingAuto} />

@@ -95,14 +95,17 @@ export default function GastosPage() {
             </Link>
           </div>
         ) : (
-          <table className="w-full">
+          /* overflow-x-auto + min-w fuerza scroll horizontal en mobile;
+              Categoria + Tipo se ocultan en pantallas chicas. */
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] sm:min-w-0">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Fecha</th>
-                <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Categoría</th>
+                <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3 hidden md:table-cell">Categoría</th>
                 <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Descripción</th>
                 <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Monto</th>
-                <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Tipo</th>
+                <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3 hidden md:table-cell">Tipo</th>
                 <th className="text-left text-sm font-semibold text-slate-600 px-5 py-3">Acciones</th>
               </tr>
             </thead>
@@ -110,14 +113,14 @@ export default function GastosPage() {
               {gastos.map((g) => (
                 <tr key={g.id} className="hover:bg-[#4FAEB2]/[0.04] transition-colors">
                   <td className="px-5 py-3.5 text-sm text-gray-600">{formatFecha(g.fecha)}</td>
-                  <td className="px-5 py-3.5 text-sm font-medium text-gray-800">{g.categoria || "—"}</td>
+                  <td className="px-5 py-3.5 text-sm font-medium text-gray-800 hidden md:table-cell">{g.categoria || "—"}</td>
                   <td className="px-5 py-3.5 text-sm text-gray-600 max-w-[200px] truncate">
                     {g.descripcion || "—"}
                   </td>
                   <td className="px-5 py-3.5 text-sm font-semibold text-gray-800 tabular-nums">
                     {formatGs(g.monto)}
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5 hidden md:table-cell">
                     <span
                       className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${tipoBadge[g.tipo] ?? "bg-slate-100"}`}
                     >
@@ -128,7 +131,7 @@ export default function GastosPage() {
                     <div className="flex gap-2">
                       <Link
                         href={`/gastos/${g.id}/editar`}
-                        className="text-xs text-gray-500 hover:text-gray-800 underline"
+                        className="inline-flex items-center min-h-[40px] text-xs text-gray-500 hover:text-gray-800 underline"
                       >
                         Editar
                       </Link>
@@ -136,7 +139,7 @@ export default function GastosPage() {
                         type="button"
                         onClick={() => handleEliminar(g)}
                         disabled={eliminando === g.id}
-                        className="text-xs text-red-500 hover:text-red-700 underline disabled:opacity-50"
+                        className="inline-flex items-center min-h-[40px] text-xs text-red-500 hover:text-red-700 underline disabled:opacity-50"
                       >
                         {eliminando === g.id ? "…" : "Eliminar"}
                       </button>
@@ -146,6 +149,7 @@ export default function GastosPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

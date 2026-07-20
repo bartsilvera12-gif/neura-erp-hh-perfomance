@@ -1,9 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { NEURA_CLIENT_NAME } from "@/lib/supabase/schema";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { FacturaElectronicaPanel } from "@/components/sifen/FacturaElectronicaPanel";
@@ -163,21 +161,6 @@ function FacturaDetalleInner() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 py-6 px-4 sm:px-6 print:px-0 w-full">
-      {/* Encabezado sólo para impresión: la cabecera de pantalla es print:hidden. */}
-      <div className="hidden print:flex items-center gap-4 border-b border-slate-300 pb-3">
-        <Image
-          src="/brand/hh-performance-logo.png"
-          alt={NEURA_CLIENT_NAME}
-          width={512}
-          height={498}
-          className="h-16 w-auto object-contain"
-        />
-        <div>
-          <p className="text-lg font-bold text-slate-900">{NEURA_CLIENT_NAME}</p>
-          <p className="text-sm text-slate-600">Factura {factura.numero_factura}</p>
-        </div>
-      </div>
-
       <div className="flex flex-wrap items-start justify-between gap-4 print:hidden">
         <div>
           <Link

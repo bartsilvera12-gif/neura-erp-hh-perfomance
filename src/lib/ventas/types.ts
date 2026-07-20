@@ -2,19 +2,34 @@ export type TipoIvaVenta = "EXENTA" | "5%" | "10%";
 export type TipoVenta   = "CONTADO" | "CREDITO";
 export type MonedaVenta = "GS" | "USD";
 export type MetodoPago  = "efectivo" | "tarjeta" | "transferencia";
+/** Nivel de precio elegido para la línea de venta.
+ *  'costo' se conserva SOLO como histórico (ventas viejas); ya no se ofrece en la UI. */
+export type TipoPrecioVenta = "minorista" | "mayorista" | "distribuidor" | "costo";
 
 /** Un ítem dentro de una venta (una línea de producto). */
 export interface LineaVenta {
   producto_id:           string;
   producto_nombre:       string;
   sku:                   string;
+  /** Cantidad en la PRESENTACION elegida (ej. 2 = 2 cajas o 10 unidades). */
   cantidad:              number;
   precio_venta_original: number;  // en la moneda elegida
-  precio_venta:          number;  // siempre en GS
+  precio_venta:          number;  // siempre en GS, POR PRESENTACION
   tipo_iva:              TipoIvaVenta;
+  /** Nivel de precio aplicado: minorista (precio_venta) | mayorista (precio_mayorista) | costo (costo_promedio). */
+  tipo_precio?:          TipoPrecioVenta;
   subtotal:              number;  // precio_venta × cantidad
   monto_iva:             number;
   total_linea:           number;  // subtotal + monto_iva
+  /**
+   * Presentacion de venta elegida (Caja, Paquete, etc). Opcional para mantener
+   * compatibilidad con flujos antiguos. Cuando viene, el backend descuenta
+   * `cantidad * presentacion.cantidad_base` del stock. Cuando NO viene, usa
+   * la default activa del producto (efecto: igual que antes).
+   */
+  presentacion_id?:           string | null;
+  presentacion_nombre?:       string | null;
+  presentacion_cantidad_base?: number | null;
 }
 
 /** Cabecera de venta: condiciones comerciales + totales consolidados. */
@@ -37,5 +52,19 @@ export interface Venta {
 
   metodo_pago?: MetodoPago;  // En lo de Mari: efectivo/tarjeta/transferencia
 
+  /**
+   * Cliente de la venta. Si hay cliente, la venta se factura (se emite factura
+   * autoimpresor); si es null, solo lleva ticket interno.
+   */
+  cliente_id?: string | null;
+
+  /** La venta emite nota de remisión (documento no fiscal). */
+  genera_nota_remision?: boolean;
+  /** Número de nota de remisión (NR-XXXXXX) si genera_nota_remision. */
+  nota_remision_numero?: string | null;
+
   fecha: string;             // ISO string, generado automáticamente
+
+  /** Nombre del usuario que registró la venta (auditoría). */
+  usuario_nombre?: string | null;
 }

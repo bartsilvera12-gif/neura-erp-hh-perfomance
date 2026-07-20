@@ -42,7 +42,7 @@ async function fallbackProductosPg(schemaRaw: string, empresaId: string): Promis
     if (!pool) return [];
     const t = quoteSchemaTable(schema, "productos");
     const { rows } = await pool.query(
-      `SELECT * FROM ${t} WHERE empresa_id = $1::uuid`,
+      `SELECT * FROM ${t} WHERE empresa_id = $1::uuid AND activo = true`,
       [empresaId]
     );
     return rows;
@@ -269,7 +269,7 @@ export async function GET(request: NextRequest) {
       buildFacturasQ(),
       buildPagosQ(),
       buildTipificacionesQ(),
-      supabase.from("productos").select("*").eq("empresa_id", empresaId),
+      supabase.from("productos").select("*").eq("empresa_id", empresaId).eq("activo", true),
       buildVentasQ(),
       ventasItemsParalelo,
       buildComprasQ(),
