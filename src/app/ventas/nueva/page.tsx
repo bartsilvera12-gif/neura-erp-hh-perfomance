@@ -163,6 +163,15 @@ export default function NuevaVentaPage() {
   const [tipoVenta, setTipoVenta] = useState<TipoVenta>("CONTADO");
   const [plazoDias, setPlazoDias] = useState("");
 
+  // Vendedor responsable (comisiones). Independiente del cajero autenticado.
+  // Lista solo usuarios activos del área Ventas de la empresa. Si el usuario
+  // autenticado es vendedor, se preselecciona (editable). Si no hay vendedores
+  // activos, se permite registrar la venta "Sin vendedor" con advertencia.
+  type VendedorLite = { id: string; nombre: string; porcentaje_comision: number };
+  const [vendedores, setVendedores] = useState<VendedorLite[]>([]);
+  const [vendedorId, setVendedorId] = useState("");
+  const [vendedoresCargados, setVendedoresCargados] = useState(false);
+
   // Cliente (opcional). Si se selecciona, se envía cliente_id al crear la venta.
   type ClienteLite = { id: string; label: string; ruc: string | null; usa_nota_remision: boolean };
   const [clientes, setClientes] = useState<ClienteLite[]>([]);
@@ -528,6 +537,34 @@ export default function NuevaVentaPage() {
     return () => { if (comboTimerRef.current) clearTimeout(comboTimerRef.current); };
   }, [comboQuery]);
 
+  // Cargar vendedores (usuarios activos del área Ventas). Si el usuario
+  // autenticado está en la lista (es vendedor), se preselecciona.
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      try {
+        const res = await fetchWithSupabaseSession("/api/ventas/vendedores", { cache: "no-store" });
+        const j = await res.json();
+        if (cancel) return;
+        const lista = ((j?.data?.vendedores ?? []) as Record<string, unknown>[]).map((v): VendedorLite => ({
+          id: String(v.id),
+          nombre: String(v.nombre ?? ""),
+          porcentaje_comision: Number(v.porcentaje_comision) || 0,
+        }));
+        setVendedores(lista);
+        const sugerido = j?.data?.sugerido_id ? String(j.data.sugerido_id) : "";
+        if (sugerido && lista.some((v) => v.id === sugerido)) {
+          setVendedorId(sugerido);
+        }
+      } catch {
+        if (!cancel) setVendedores([]);
+      } finally {
+        if (!cancel) setVendedoresCargados(true);
+      }
+    })();
+    return () => { cancel = true; };
+  }, []);
+
   // Cargar cajas abiertas y resolver la caja activa del cajero.
   useEffect(() => {
     let cancel = false;
@@ -757,6 +794,7 @@ export default function NuevaVentaPage() {
           plazo_dias:   tipoVenta === "CREDITO" ? plazoDiasNum : undefined,
           metodo_pago:  metodoPago,
           cliente_id:   clienteIdFinal || null,
+          vendedor_usuario_id: vendedorId || null,
           genera_nota_remision: !!clienteIdFinal && generaNotaRemision,
         },
         undefined,
@@ -883,6 +921,31 @@ export default function NuevaVentaPage() {
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 sm:p-6">
           <SectionTitle>Datos de la venta</SectionTitle>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+
+            {/* Vendedor (obligatorio salvo que no haya vendedores activos) */}
+            <div className="relative">
+              <label className={labelClass}>Vendedor</label>
+              <select
+                value={vendedorId}
+                onChange={(e) => setVendedorId(e.target.value)}
+                className={inputClass}
+                disabled={vendedores.length === 0}
+              >
+                <option value="">Sin vendedor</option>
+                {vendedores.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.nombre}
+                    {v.porcentaje_comision > 0 ? ` — ${v.porcentaje_comision}%` : ""}
+                  </option>
+                ))}
+              </select>
+              {vendedoresCargados && vendedores.length === 0 && (
+                <p className="mt-1 text-xs font-medium text-amber-600">
+                  No hay vendedores activos del área Ventas. La venta se registrará “Sin
+                  vendedor”.
+                </p>
+              )}
+            </div>
 
             {/* Cliente (opcional) */}
             <div ref={clienteContainerRef} className="relative">

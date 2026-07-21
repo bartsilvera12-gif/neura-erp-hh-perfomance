@@ -91,6 +91,12 @@ export interface CreateVentaPgParams {
   /** Usuario que registra la venta (auditoría de movimientos de inventario). */
   usuarioId?: string | null;
   usuarioNombre?: string | null;
+  /**
+   * Vendedor responsable de la venta (comisiones). Independiente del cajero
+   * (usuarioId/usuarioNombre). Si viene, se valida contra la empresa y se
+   * congela su porcentaje de comisión en la venta. Null = "Sin vendedor".
+   */
+  vendedorUsuarioId?: string | null;
 }
 
 function recalcTotals(items: CreateVentaItemInput[]) {
@@ -520,6 +526,46 @@ export async function createVentaTransaccionalPg(
     throw new Error("Hay varias cajas abiertas: seleccioná la caja para registrar la venta.");
   }
 
+  // 4d) Vendedor + snapshot de comisión (independiente del cajero).
+  //     - Debe pertenecer a la empresa, estar activo y ser del área 'ventas'.
+  //     - Se congela el porcentaje vigente y se calcula la comisión sobre el
+  //       total recalculado por el servidor (calc.total), nunca sobre valores
+  //       enviados por el frontend.
+  let vendedorUsuarioId: string | null = null;
+  let vendedorNombre: string | null = null;
+  let porcentajeComisionSnapshot = 0;
+  let montoComision = 0;
+  if (params.vendedorUsuarioId) {
+    const vq = await sb
+      .from("usuarios")
+      .select("id, nombre, area, activo, estado, porcentaje_comision")
+      .eq("empresa_id", params.empresaId)
+      .eq("id", params.vendedorUsuarioId)
+      .maybeSingle();
+    if (vq.error) throw new Error(vq.error.message);
+    const v = vq.data as {
+      id: string;
+      nombre: string | null;
+      area: string | null;
+      activo: boolean | null;
+      estado: string | null;
+      porcentaje_comision: number | string | null;
+    } | null;
+    if (!v) {
+      throw new Error("El vendedor seleccionado no pertenece a esta empresa.");
+    }
+    if ((v.area ?? "").trim().toLowerCase() !== "ventas") {
+      throw new Error("El vendedor seleccionado no pertenece al área Ventas.");
+    }
+    if (v.activo === false || v.estado === "inactivo") {
+      throw new Error("El vendedor seleccionado está inactivo.");
+    }
+    vendedorUsuarioId = v.id;
+    vendedorNombre = v.nombre ?? null;
+    porcentajeComisionSnapshot = Number(v.porcentaje_comision || 0);
+    montoComision = Math.round((calc.total * porcentajeComisionSnapshot) / 100 * 100) / 100;
+  }
+
   // 5) Insertar venta
   const insVenta = await sb
     .from("ventas")
@@ -543,6 +589,10 @@ export async function createVentaTransaccionalPg(
       caja_id: cajaIdActual,
       created_by: params.usuarioId ?? null,
       usuario_nombre: params.usuarioNombre ?? null,
+      vendedor_usuario_id: vendedorUsuarioId,
+      vendedor_nombre: vendedorNombre,
+      porcentaje_comision_snapshot: porcentajeComisionSnapshot,
+      monto_comision: montoComision,
     })
     .select("id")
     .single();

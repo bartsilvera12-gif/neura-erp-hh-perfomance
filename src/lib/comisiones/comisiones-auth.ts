@@ -8,6 +8,7 @@ import {
   resolveEffectiveModules,
 } from "@/lib/modulos/resolve-effective-modules";
 import { esRolAdminEmpresaOGlobal } from "@/lib/auth/rol-empresa";
+import { isErpRolSupervisor } from "@/lib/usuarios/erp-rol-normalize";
 
 export type ComisionesApiAuth =
   | { ok: true; empresaId: string; usuarioCatalogId: string; rol: string | null }
@@ -79,4 +80,13 @@ export async function requireComisionesModuleAccess(request: Request): Promise<C
 /** Admin global / admin empresa / super_admin: configuración de políticas y escalas. */
 export function puedeConfigurarComisiones(rol: string | null): boolean {
   return esRolAdminEmpresaOGlobal(rol);
+}
+
+/**
+ * Quién ve el consolidado de TODOS los vendedores: administrador, super_admin y
+ * supervisor. El rol vendedor (y cualquier otro) solo puede ver lo suyo, sin
+ * poder consultar a otro vendedor cambiando parámetros de la URL.
+ */
+export function puedeVerTodasComisiones(rol: string | null): boolean {
+  return esRolAdminEmpresaOGlobal(rol) || isErpRolSupervisor(rol);
 }

@@ -1,11 +1,24 @@
 import { NextResponse } from "next/server";
-import { getChatServiceClientForEmpresa } from "@/app/api/chat/_chat-service-client";
 import { errorResponse, successResponse } from "@/lib/api/response";
-import { requireComisionesModuleAccess } from "@/lib/comisiones/comisiones-auth";
+import {
+  requireComisionesModuleAccess,
+  puedeVerTodasComisiones,
+} from "@/lib/comisiones/comisiones-auth";
+import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
+import { computeComisionesResumen } from "@/lib/comisiones/comisiones-ventas";
 
-const TZ_DEFAULT = "America/Asuncion";
-
-/** Vista inicial del módulo: período etiquetado + política activa (sin liquidaciones). */
+/**
+ * GET /api/comisiones/resumen?mes=YYYY-MM&vendedor_id=...
+ *
+ * Resumen de comisiones sobre ventas reales del mes (zona America/Asuncion).
+ *
+ * Permisos:
+ *  - Admin / super_admin / supervisor: ven todos los vendedores; `vendedor_id`
+ *    opcional filtra a uno.
+ *  - Cualquier otro rol (vendedor): SOLO ve sus propios resultados. El
+ *    `vendedor_id` de la URL se ignora y se fuerza a su propio id, de modo que
+ *    no puede consultar a otro vendedor cambiando parámetros.
+ */
 export async function GET(request: Request) {
   const auth = await requireComisionesModuleAccess(request);
   if (!auth.ok) {
@@ -13,66 +26,32 @@ export async function GET(request: Request) {
   }
 
   try {
-    const sb = await getChatServiceClientForEmpresa(auth.empresaId);
+    const url = new URL(request.url);
+    const mes = url.searchParams.get("mes");
+    const vendedorIdParam = url.searchParams.get("vendedor_id");
 
-    const { data: politica } = await sb
-      .from("comision_politicas")
-      .select("*")
-      .eq("empresa_id", auth.empresaId)
-      .maybeSingle();
+    const verTodas = puedeVerTodasComisiones(auth.rol);
+    // Rol restringido: se ignora cualquier vendedor_id y se fuerza el propio.
+    const soloVendedorId = verTodas
+      ? vendedorIdParam && vendedorIdParam.trim()
+        ? vendedorIdParam.trim()
+        : null
+      : auth.usuarioCatalogId;
 
-    const tz =
-      politica &&
-      typeof (politica as { timezone?: string }).timezone === "string" &&
-      (politica as { timezone: string }).timezone.trim()
-        ? (politica as { timezone: string }).timezone.trim()
-        : TZ_DEFAULT;
-
-    let periodoEtiqueta: string;
-    try {
-      periodoEtiqueta = new Intl.DateTimeFormat("es-PY", {
-        month: "long",
-        year: "numeric",
-        timeZone: tz,
-      }).format(new Date());
-    } catch {
-      periodoEtiqueta = new Intl.DateTimeFormat("es-PY", {
-        month: "long",
-        year: "numeric",
-        timeZone: TZ_DEFAULT,
-      }).format(new Date());
-    }
-
-    const politicaActiva =
-      politica && (politica as { activo?: boolean }).activo === true ? politica : null;
-
-    let periodoDb: Record<string, unknown> | null = null;
-    if (politicaActiva && typeof (politicaActiva as { id: string }).id === "string") {
-      const pid = (politicaActiva as { id: string }).id;
-      const nowIso = new Date().toISOString();
-      const { data: per } = await sb
-        .from("comision_periodos")
-        .select("*")
-        .eq("empresa_id", auth.empresaId)
-        .eq("politica_id", pid)
-        .lte("fecha_inicio", nowIso)
-        .gte("fecha_fin", nowIso)
-        .maybeSingle();
-      if (per) periodoDb = per as Record<string, unknown>;
-    }
+    const schema = await fetchDataSchemaForEmpresaId(auth.empresaId);
+    const resumen = await computeComisionesResumen(schema, auth.empresaId, mes, {
+      soloVendedorId,
+    });
 
     return NextResponse.json(
       successResponse({
-        periodo_actual_etiqueta: periodoEtiqueta,
-        timezone_usado: tz,
-        politica_activa: politicaActiva,
-        periodo_calendario: periodoDb,
-        mensaje_calculo:
-          "El cálculo productivo de liquidaciones se habilitará en el siguiente paso del módulo.",
+        ...resumen,
+        puede_ver_todas: verTodas,
+        vendedor_id_efectivo: soloVendedorId,
       })
     );
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error";
+    const msg = e instanceof Error ? e.message : "Error al calcular comisiones.";
     return NextResponse.json(errorResponse(msg), { status: 500 });
   }
 }

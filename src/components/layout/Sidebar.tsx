@@ -155,8 +155,9 @@ const MENU_STRUCTURE: MenuItem[] = [
   { key: "entidades_bancarias", slug: "ventas", label: "Entidades bancarias", href: "/configuracion/entidades-bancarias", icon: Building2 },
   { key: "reportes", slug: "reportes", label: "Reportes", href: "/reportes", icon: BarChart3 },
   // Pagos oculto en instancia En lo de Mari (no usa este módulo).
-  // Comisiones y Notas de credito ocultos por ahora:
-  // { key: "comisiones", slug: "comisiones", label: "Comisiones", href: "/comisiones", icon: Percent },
+  // Comisiones: metas y comisiones de vendedores sobre ventas reales.
+  { key: "comisiones", slug: "comisiones", label: "Comisiones", href: "/comisiones", icon: Percent },
+  // Notas de credito oculto por ahora:
   // {
   //   key: "notas_credito", slug: "notas_credito", label: "Notas de crédito",
   //   href: "/notas-credito", icon: ScrollText,

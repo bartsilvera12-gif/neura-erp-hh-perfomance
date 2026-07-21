@@ -196,6 +196,13 @@ export async function POST(request: NextRequest) {
       };
     }
 
+    // Vendedor responsable (comisiones). Opcional: null = "Sin vendedor".
+    // La validación real (empresa/activo/área) ocurre en el servidor de venta.
+    const vendedorUsuarioId =
+      typeof o.vendedor_usuario_id === "string" && o.vendedor_usuario_id.trim()
+        ? o.vendedor_usuario_id.trim()
+        : null;
+
     const subtotalDeclarado = Number(o.subtotal);
     const montoIvaDeclarado = Number(o.monto_iva);
     const totalDeclarado = Number(o.total);
@@ -278,6 +285,7 @@ export async function POST(request: NextRequest) {
       cajaId: o.caja_id != null && String(o.caja_id).trim() !== "" ? String(o.caja_id) : null,
       usuarioId: auth.usuarioCatalogId ?? null,
       usuarioNombre: auth.nombre ?? auth.user?.email ?? null,
+      vendedorUsuarioId,
     });
 
     // Vincular el pedido facturado con la venta creada (Caja). Trazabilidad:

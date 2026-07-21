@@ -67,4 +67,12 @@ export interface Venta {
 
   /** Nombre del usuario que registró la venta (auditoría). */
   usuario_nombre?: string | null;
+
+  /** Vendedor responsable (comisiones). Independiente del cajero. */
+  vendedor_usuario_id?: string | null;
+  vendedor_nombre?: string | null;
+  /** % de comisión congelado al momento de la venta. */
+  porcentaje_comision_snapshot?: number | null;
+  /** Comisión calculada por el servidor sobre el total. */
+  monto_comision?: number | null;
 }
