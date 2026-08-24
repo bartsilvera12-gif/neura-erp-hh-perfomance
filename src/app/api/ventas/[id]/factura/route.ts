@@ -35,6 +35,65 @@ interface ItemRow {
   tipo_iva: string;
 }
 
+/** Decodifica entidades HTML numéricas/basicas de un mensaje SET (&#243; → ó). */
+function decodeSet(msg: string | null | undefined): string {
+  if (!msg) return "";
+  return msg
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(String(n), 10)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function pageShell(title: string, bodyInner: string): NextResponse {
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<title>${title}</title></head>` +
+    `<body style="margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;` +
+    `background:#f1f5f9;color:#0f172a;display:flex;min-height:100vh;align-items:center;justify-content:center;">` +
+    `<div style="max-width:420px;width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:16px;` +
+    `padding:32px 28px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06);">${bodyInner}</div></body></html>`;
+  return new NextResponse(html, {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
+/** Página que se auto-refresca esperando la aprobación de la SET. */
+function waitingPage(numeroFac: string, refreshUrl: string, origin: string, facturaId: string): NextResponse {
+  void origin;
+  const inner =
+    `<div style="width:44px;height:44px;margin:0 auto 20px;border:4px solid #e2e8f0;` +
+    `border-top-color:#0ea5e9;border-radius:50%;animation:sp 1s linear infinite;"></div>` +
+    `<style>@keyframes sp{to{transform:rotate(360deg)}}</style>` +
+    `<h1 style="font-size:18px;margin:0 0 8px;">Generando factura electrónica…</h1>` +
+    `<p style="font-size:14px;color:#475569;margin:0 0 4px;">Factura <b>${numeroFac}</b></p>` +
+    `<p style="font-size:13px;color:#64748b;margin:0;">Esperando la aprobación de la SET. ` +
+    `Esta página se actualiza sola y mostrará el documento legal (KuDE) en unos segundos.</p>` +
+    `<meta http-equiv="refresh" content="2;url=${refreshUrl.replace(/"/g, "&quot;")}">`;
+  void facturaId;
+  return pageShell("Generando factura electrónica", inner);
+}
+
+/** Página estática de estado (error / espera agotada). */
+function htmlPage(
+  title: string,
+  mensaje: string,
+  opts: { tone: "error" | "wait"; facturaId: string; origin: string }
+): NextResponse {
+  const color = opts.tone === "error" ? "#dc2626" : "#0ea5e9";
+  const icon = opts.tone === "error" ? "&#9888;" : "&#8987;";
+  const detalleUrl = new URL(`/facturas/${opts.facturaId}`, opts.origin).toString();
+  const inner =
+    `<div style="font-size:40px;line-height:1;margin-bottom:12px;color:${color};">${icon}</div>` +
+    `<h1 style="font-size:18px;margin:0 0 10px;">${title}</h1>` +
+    `<p style="font-size:14px;color:#475569;margin:0 0 20px;">${mensaje}</p>` +
+    `<a href="${detalleUrl}" style="display:inline-block;background:${color};color:#fff;` +
+    `text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:10px;">` +
+    `Ver detalle de la factura</a>`;
+  return pageShell(title, inner);
+}
+
 export async function GET(request: NextRequest, ctxParams: { params: Promise<{ id: string }> }) {
   const { id } = await ctxParams.params;
   const url = new URL(request.url);
@@ -218,31 +277,42 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
         .from("facturas")
         .select("numero_factura")
         .eq("id", facturaIdVenta)
-        .eq("empresa_id", empresaId)
         .maybeSingle();
       const numeroFac =
         (numQ.data as { numero_factura?: string | null } | null)?.numero_factura ?? "—";
 
-      const detalleEstado =
-        estadoDe === "rechazado"
-          ? "La SET rechazó el documento electrónico. Revisá el detalle de la factura y reintentá."
-          : estadoDe === "cancelado"
-            ? "El documento electrónico fue cancelado."
-            : "El documento electrónico está en proceso de aprobación en la SET. El KuDE legal queda disponible en el detalle de la factura al aprobarse.";
+      // Rechazado / cancelado: estado terminal que NO se resuelve solo. Página
+      // clara con el motivo, sin auto-refresh y sin cartel de "en proceso".
+      if (estadoDe === "rechazado" || estadoDe === "cancelado") {
+        const feErr = feQ.data as { error?: string | null } | null;
+        return htmlPage(
+          estadoDe === "rechazado" ? "Documento rechazado por la SET" : "Documento cancelado",
+          estadoDe === "rechazado"
+            ? `La SET rechazó la factura ${numeroFac}. ${decodeSet(feErr?.error) || "Revisá el detalle de la factura y reintentá."}`
+            : `La factura ${numeroFac} fue cancelada.`,
+          { tone: "error", facturaId: facturaIdVenta, origin });
+      }
 
-      return ticket({
-        borrador: true,
-        motivo: `Comprobante interno — ${detalleEstado}`,
-        numeroCompleto: numeroFac,
-        fechaEmision: venta.fecha,
-        condicion: String(venta.tipo_venta).toUpperCase() === "CREDITO" ? "credito" : "contado",
-        timbrado: {
-          numero: cfg.timbrado_numero?.trim() || "—",
-          inicio: cfg.timbrado_inicio_vigencia,
-          fin: cfg.timbrado_fin_vigencia,
-        },
-        liq: liquidarIva(itemsRaw),
-      });
+      // Procesando (borrador/generado/firmado/enviado): SET tarda segundos.
+      // En vez de imprimir un comprobante "en proceso", mostramos una página que
+      // se refresca sola; cuando SET aprueba, ESTA misma ruta redirige al KuDE
+      // legal (chequeo de arriba). Cap de intentos para no refrescar al infinito
+      // si el worker está caído.
+      const tick = parseInt(url.searchParams.get("t") ?? "0", 10) || 0;
+      const MAX_TICKS = 24; // ~48s a 2s por refresh
+      if (tick < MAX_TICKS) {
+        const next = new URL(request.url);
+        next.searchParams.set("t", String(tick + 1));
+        return waitingPage(numeroFac, next.toString(), origin, facturaIdVenta);
+      }
+      // Se agotó la espera: SET sigue procesando. No es error; el KuDE aparece
+      // solo en el detalle cuando apruebe.
+      return htmlPage(
+        "Factura en proceso en la SET",
+        `La factura ${numeroFac} se está emitiendo y la SET todavía no respondió. ` +
+          `El documento legal (KuDE) aparece en el detalle de la factura apenas se apruebe; ` +
+          `no hace falta volver a vender.`,
+        { tone: "wait", facturaId: facturaIdVenta, origin });
     }
 
     return borrador(
