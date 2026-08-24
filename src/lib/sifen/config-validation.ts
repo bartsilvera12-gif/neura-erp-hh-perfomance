@@ -74,6 +74,88 @@ export function normalizeActividadEconomica(
   return { ok: true, codigo, descripcion };
 }
 
+/**
+ * Ubicación del emisor para `gEmis` (cDepEmi/dDesDepEmi, cDisEmi/dDesDisEmi,
+ * cCiuEmi/dDesCiuEmi).
+ *
+ * Códigos y descripciones deben salir de la tabla oficial DNIT «CÓDIGO DE
+ * REFERENCIA GEOGRÁFICA» (e-Kuatia → Tablas y Codificaciones): SET valida el
+ * par código+descripción. Departamento y ciudad son obligatorios en el XSD;
+ * distrito es opcional, pero si se informa el código exige la descripción.
+ */
+export function normalizeUbicacionEmisor(b: Record<string, unknown>):
+  | {
+      ok: true;
+      departamento_codigo: string;
+      departamento_descripcion: string;
+      distrito_codigo: string | null;
+      distrito_descripcion: string | null;
+      ciudad_codigo: string;
+      ciudad_descripcion: string;
+    }
+  | { ok: false; error: string } {
+  const depCod = trimStr(b.departamento_codigo);
+  const depDes = trimStr(b.departamento_descripcion);
+  const disCod = trimStr(b.distrito_codigo);
+  const disDes = trimStr(b.distrito_descripcion);
+  const ciuCod = trimStr(b.ciudad_codigo);
+  const ciuDes = trimStr(b.ciudad_descripcion);
+
+  if (!depCod) {
+    return {
+      ok: false,
+      error:
+        "departamento_codigo es obligatorio (gEmis.cDepEmi): use el código de la tabla geográfica DNIT, ej. 12 = CENTRAL.",
+    };
+  }
+  if (!/^\d{1,2}$/.test(depCod)) {
+    return { ok: false, error: "departamento_codigo debe ser numérico de 1 a 2 dígitos (tabla DNIT)." };
+  }
+  if (!depDes) {
+    return {
+      ok: false,
+      error:
+        "departamento_descripcion es obligatoria (gEmis.dDesDepEmi) y debe coincidir textualmente con la tabla DNIT.",
+    };
+  }
+  if (!ciuCod) {
+    return {
+      ok: false,
+      error:
+        "ciudad_codigo es obligatorio (gEmis.cCiuEmi): use el código de ciudad/localidad de la tabla geográfica DNIT.",
+    };
+  }
+  if (!/^\d{1,5}$/.test(ciuCod)) {
+    return { ok: false, error: "ciudad_codigo debe ser numérico de 1 a 5 dígitos (tabla DNIT)." };
+  }
+  if (!ciuDes) {
+    return {
+      ok: false,
+      error:
+        "ciudad_descripcion es obligatoria (gEmis.dDesCiuEmi) y debe coincidir textualmente con la tabla DNIT.",
+    };
+  }
+  if (disCod && !/^\d{1,4}$/.test(disCod)) {
+    return { ok: false, error: "distrito_codigo debe ser numérico de 1 a 4 dígitos (tabla DNIT)." };
+  }
+  if (disCod && !disDes) {
+    return {
+      ok: false,
+      error: "distrito_descripcion es obligatoria cuando se informa distrito_codigo (gEmis.dDesDisEmi).",
+    };
+  }
+
+  return {
+    ok: true,
+    departamento_codigo: depCod,
+    departamento_descripcion: depDes,
+    distrito_codigo: disCod || null,
+    distrito_descripcion: disCod ? disDes : null,
+    ciudad_codigo: ciuCod,
+    ciudad_descripcion: ciuDes,
+  };
+}
+
 export function parseAmbiente(v: unknown): AmbienteSifen | null {
   const s = trimStr(v);
   if (s === "test" || s === "produccion") return s;
@@ -149,6 +231,8 @@ export function validateCreateBody(raw: unknown): EmpresaSifenConfigCreateResult
   if (!act.ok) return { ok: false, error: act.error };
   if (!establecimiento) return { ok: false, error: "establecimiento es obligatorio" };
   if (!punto_expedicion) return { ok: false, error: "punto_expedicion es obligatorio" };
+  const ubi = normalizeUbicacionEmisor(b);
+  if (!ubi.ok) return { ok: false, error: ubi.error };
 
   const pw = parseCertificadoPasswordWire(b);
   if (pw.kind === "error") return { ok: false, error: pw.message };
@@ -177,6 +261,12 @@ export function validateCreateBody(raw: unknown): EmpresaSifenConfigCreateResult
     actividad_economica_descripcion: act.descripcion,
     establecimiento,
     punto_expedicion,
+    departamento_codigo: ubi.departamento_codigo,
+    departamento_descripcion: ubi.departamento_descripcion,
+    distrito_codigo: ubi.distrito_codigo,
+    distrito_descripcion: ubi.distrito_descripcion,
+    ciudad_codigo: ubi.ciudad_codigo,
+    ciudad_descripcion: ubi.ciudad_descripcion,
     ambiente,
     csc: optionalNullableString(b.csc),
     certificado_path: optionalNullableString(b.certificado_path),
@@ -281,6 +371,26 @@ export function buildPatchUpdate(raw: unknown): EmpresaSifenConfigPatchResult {
     if (!v) return { ok: false, error: "punto_expedicion no puede quedar vacío" };
     patch.punto_expedicion = v;
   }
+  const TOCA_UBICACION = [
+    "departamento_codigo",
+    "departamento_descripcion",
+    "distrito_codigo",
+    "distrito_descripcion",
+    "ciudad_codigo",
+    "ciudad_descripcion",
+  ];
+  if (TOCA_UBICACION.some((k) => k in b)) {
+    // La ubicación se valida como bloque: un PATCH parcial podría dejar código y
+    // descripción desalineados y SET rechaza el par inconsistente.
+    const ubi = normalizeUbicacionEmisor(b);
+    if (!ubi.ok) return { ok: false, error: ubi.error };
+    patch.departamento_codigo = ubi.departamento_codigo;
+    patch.departamento_descripcion = ubi.departamento_descripcion;
+    patch.distrito_codigo = ubi.distrito_codigo;
+    patch.distrito_descripcion = ubi.distrito_descripcion;
+    patch.ciudad_codigo = ubi.ciudad_codigo;
+    patch.ciudad_descripcion = ubi.ciudad_descripcion;
+  }
   if ("ambiente" in b) {
     const a = parseAmbiente(b.ambiente);
     if (!a) return { ok: false, error: "ambiente debe ser 'test' o 'produccion'" };
@@ -357,6 +467,12 @@ export function rowFromCreateBody(empresaId: string, body: EmpresaSifenConfigCre
     actividad_economica_descripcion: body.actividad_economica_descripcion,
     establecimiento: body.establecimiento,
     punto_expedicion: body.punto_expedicion,
+    departamento_codigo: body.departamento_codigo,
+    departamento_descripcion: body.departamento_descripcion,
+    distrito_codigo: body.distrito_codigo ?? null,
+    distrito_descripcion: body.distrito_descripcion ?? null,
+    ciudad_codigo: body.ciudad_codigo,
+    ciudad_descripcion: body.ciudad_descripcion,
     csc: body.csc ?? null,
     certificado_path: body.certificado_path ?? null,
     activo: body.activo ?? true,

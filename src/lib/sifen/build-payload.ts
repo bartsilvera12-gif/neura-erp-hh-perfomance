@@ -7,7 +7,11 @@ import type {
   SifenPayloadMeta,
   SifenPayloadReceptor,
 } from "./types";
-import { normalizeActividadEconomica, normalizeTimbradoFechaInicioVigencia } from "./config-validation";
+import {
+  normalizeActividadEconomica,
+  normalizeTimbradoFechaInicioVigencia,
+  normalizeUbicacionEmisor,
+} from "./config-validation";
 import { splitRucParaXml } from "./sifen-cdc";
 import {
   normalizarTipoDocReceptorSifen,
@@ -87,6 +91,12 @@ export interface SifenBuildConfigRow {
   actividad_economica_descripcion?: string | null;
   establecimiento: string;
   punto_expedicion: string;
+  departamento_codigo?: string | null;
+  departamento_descripcion?: string | null;
+  distrito_codigo?: string | null;
+  distrito_descripcion?: string | null;
+  ciudad_codigo?: string | null;
+  ciudad_descripcion?: string | null;
   csc: string | null;
   activo: boolean;
 }
@@ -172,6 +182,23 @@ function validateEmisor(config: SifenBuildConfigRow | null): { ok: true; emisor:
       error: `Configuración SIFEN: ${act.error} Configuración → Facturación electrónica.`,
     };
   }
+  // Sin ubicación cargada se cortaba antes con los defaults del builder
+  // (`cDepEmi=1 CAPITAL` / `cCiuEmi=1 ASUNCION`), publicando un domicilio que
+  // no es el del emisor. Mejor fallar acá con un mensaje accionable.
+  const ubi = normalizeUbicacionEmisor({
+    departamento_codigo: config.departamento_codigo,
+    departamento_descripcion: config.departamento_descripcion,
+    distrito_codigo: config.distrito_codigo,
+    distrito_descripcion: config.distrito_descripcion,
+    ciudad_codigo: config.ciudad_codigo,
+    ciudad_descripcion: config.ciudad_descripcion,
+  });
+  if (!ubi.ok) {
+    return {
+      ok: false,
+      error: `Configuración SIFEN: ${ubi.error} Configuración → Facturación electrónica.`,
+    };
+  }
   return {
     ok: true,
     emisor: {
@@ -184,6 +211,12 @@ function validateEmisor(config: SifenBuildConfigRow | null): { ok: true; emisor:
       actividad_economica_descripcion: act.descripcion,
       establecimiento,
       punto_expedicion,
+      departamento_codigo: ubi.departamento_codigo,
+      departamento_descripcion: ubi.departamento_descripcion,
+      distrito_codigo: ubi.distrito_codigo,
+      distrito_descripcion: ubi.distrito_descripcion,
+      ciudad_codigo: ubi.ciudad_codigo,
+      ciudad_descripcion: ubi.ciudad_descripcion,
       csc: cscRaw === "" ? null : cscRaw,
     },
   };

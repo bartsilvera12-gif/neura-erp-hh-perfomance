@@ -184,6 +184,72 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
     });
   }
 
+  // ── Modo SIFEN ─────────────────────────────────────────────────────────
+  // El documento legal no es este ticket sino el KuDE, que solo existe una vez
+  // que SET aprueba el DE. Mientras tanto entregamos un comprobante interno con
+  // el número de factura real, no el "XXXXXXX" del borrador de autoimpresor.
+  if (!forcePreview && modo.modo === "sifen") {
+    const fQ = await ctx.supabase
+      .from("ventas")
+      .select("factura_id")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const facturaIdVenta = (fQ.data as { factura_id?: string | null } | null)?.factura_id ?? null;
+
+    if (facturaIdVenta) {
+      const feQ = await ctx.supabase
+        .from("factura_electronica")
+        .select("estado_sifen, cdc")
+        .eq("factura_id", facturaIdVenta)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      const fe = feQ.data as { estado_sifen?: string | null; cdc?: string | null } | null;
+      const estadoDe = String(fe?.estado_sifen ?? "");
+
+      // Aprobado por SET → el legal es el KuDE. Redirigimos ahí en vez de
+      // imprimir un comprobante interno que ya no hace falta.
+      if (estadoDe === "aprobado") {
+        const kude = new URL(`/api/facturas/${facturaIdVenta}/sifen/kude`, origin);
+        return NextResponse.redirect(kude, { status: 302 });
+      }
+
+      const numQ = await ctx.supabase
+        .from("facturas")
+        .select("numero_factura")
+        .eq("id", facturaIdVenta)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      const numeroFac =
+        (numQ.data as { numero_factura?: string | null } | null)?.numero_factura ?? "—";
+
+      const detalleEstado =
+        estadoDe === "rechazado"
+          ? "La SET rechazó el documento electrónico. Revisá el detalle de la factura y reintentá."
+          : estadoDe === "cancelado"
+            ? "El documento electrónico fue cancelado."
+            : "El documento electrónico está en proceso de aprobación en la SET. El KuDE legal queda disponible en el detalle de la factura al aprobarse.";
+
+      return ticket({
+        borrador: true,
+        motivo: `Comprobante interno — ${detalleEstado}`,
+        numeroCompleto: numeroFac,
+        fechaEmision: venta.fecha,
+        condicion: String(venta.tipo_venta).toUpperCase() === "CREDITO" ? "credito" : "contado",
+        timbrado: {
+          numero: cfg.timbrado_numero?.trim() || "—",
+          inicio: cfg.timbrado_inicio_vigencia,
+          fin: cfg.timbrado_fin_vigencia,
+        },
+        liq: liquidarIva(itemsRaw),
+      });
+    }
+
+    return borrador(
+      "Esta venta no generó factura. Emitila desde el módulo de Facturación."
+    );
+  }
+
   const motivo =
     modo.modo !== "autoimpresor"
       ? "El modo de facturación no es autoimpresor."

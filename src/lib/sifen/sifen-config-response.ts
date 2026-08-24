@@ -1,6 +1,12 @@
 import type { AmbienteSifen, EmpresaSifenConfigDTO } from "./types";
 import { normalizePlazoCancelacionHoras } from "./sifen-cancelacion-rules";
 
+function nullableTrimmed(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
 /**
  * Convierte una fila de BD (con columna cifrada) al DTO expuesto por la API.
  * Nunca incluye la contraseña ni el ciphertext.
@@ -42,6 +48,12 @@ export function toEmpresaSifenConfigPublicDto(
         : String(row.actividad_economica_descripcion).trim(),
     establecimiento: String(row.establecimiento ?? ""),
     punto_expedicion: String(row.punto_expedicion ?? ""),
+    departamento_codigo: nullableTrimmed(row.departamento_codigo),
+    departamento_descripcion: nullableTrimmed(row.departamento_descripcion),
+    distrito_codigo: nullableTrimmed(row.distrito_codigo),
+    distrito_descripcion: nullableTrimmed(row.distrito_descripcion),
+    ciudad_codigo: nullableTrimmed(row.ciudad_codigo),
+    ciudad_descripcion: nullableTrimmed(row.ciudad_descripcion),
     csc: row.csc == null ? null : String(row.csc),
     certificado_path: row.certificado_path == null ? null : String(row.certificado_path),
     certificado_vencimiento:

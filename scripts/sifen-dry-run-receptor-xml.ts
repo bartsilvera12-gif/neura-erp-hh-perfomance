@@ -15,6 +15,12 @@ const emisorBase = {
   actividad_economica_descripcion: "Comercio minorista",
   establecimiento: "001",
   punto_expedicion: "001",
+  departamento_codigo: "12",
+  departamento_descripcion: "CENTRAL",
+  distrito_codigo: "164",
+  distrito_descripcion: "SAN LORENZO",
+  ciudad_codigo: "6010",
+  ciudad_descripcion: "SAN LORENZO",
   csc: null,
 } as const;
 
@@ -46,6 +52,12 @@ const xmlOpts = {
   emisorEmail: "dry-run@example.com.py",
   emisorDireccion: emisorBase.direccion_fiscal,
   emisorNumCasa: 1,
+  emisorDepartamento: emisorBase.departamento_codigo,
+  emisorDepartamentoDescripcion: emisorBase.departamento_descripcion,
+  emisorDistrito: emisorBase.distrito_codigo,
+  emisorDistritoDescripcion: emisorBase.distrito_descripcion,
+  emisorCiudad: emisorBase.ciudad_codigo,
+  emisorCiudadDescripcion: emisorBase.ciudad_descripcion,
   actividadEconomicaCodigo: emisorBase.actividad_economica_codigo,
   actividadEconomicaDescripcion: emisorBase.actividad_economica_descripcion,
 };

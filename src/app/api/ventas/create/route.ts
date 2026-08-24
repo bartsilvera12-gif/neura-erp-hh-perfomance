@@ -4,6 +4,7 @@ import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema"
 import { createVentaTransaccionalPg, StockInsuficienteError } from "@/lib/ventas/server/create-venta-pg";
 import type { CreateVentaItemInput } from "@/lib/ventas/server/create-venta-pg";
 import { insertVentaPagoDetalle } from "@/lib/ventas/server/pago-detalle-pg";
+import { encolarDeParaFactura } from "@/lib/sifen/jobs/encolar-de-para-factura";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import type { Venta, LineaVenta } from "@/lib/ventas/types";
@@ -265,7 +266,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { ventaId, numeroControl, fechaIso, notaRemisionNumero } = await createVentaTransaccionalPg({
+    const {
+      ventaId,
+      numeroControl,
+      fechaIso,
+      notaRemisionNumero,
+      facturaId,
+      numeroFactura,
+      facturaWarning,
+    } = await createVentaTransaccionalPg({
       schema,
       empresaId: auth.empresa_id,
       clienteId,
@@ -429,7 +438,33 @@ export async function POST(request: NextRequest) {
       nota_remision_numero: notaRemisionNumero,
     });
 
-    return NextResponse.json(successResponse({ venta, nota_remision_numero: notaRemisionNumero }));
+    // Emisión del DE: se encola y el worker de `sifen_jobs` la procesa aparte.
+    // Deliberadamente NO se espera la respuesta de SET — puede tardar y falla
+    // seguido; bloquear la caja por eso dejaría al cajero sin poder cobrar.
+    // El ticket se imprime ya; el KuDE legal aparece cuando SET aprueba.
+    let sifenEncolado = false;
+    let sifenWarning: string | null = null;
+    if (facturaId) {
+      const sbSifen = createServiceRoleClientWithDbSchema(schema);
+      const enc = await encolarDeParaFactura(auth, sbSifen, facturaId, "auto_venta");
+      if (enc.ok) {
+        sifenEncolado = enc.started;
+      } else {
+        sifenWarning = `Factura ${numeroFactura} creada, pero no se pudo encolar el documento electrónico: ${enc.error}`;
+      }
+    }
+
+    return NextResponse.json(
+      successResponse({
+        venta,
+        nota_remision_numero: notaRemisionNumero,
+        factura_id: facturaId ?? null,
+        numero_factura: numeroFactura ?? null,
+        factura_warning: facturaWarning ?? null,
+        sifen_encolado: sifenEncolado,
+        sifen_warning: sifenWarning,
+      })
+    );
   } catch (err) {
     // Falta de stock sin autorizar: 409 con el detalle de faltantes para que la UI
     // muestre el modal de confirmación y reintente con permitir_sin_stock=true.

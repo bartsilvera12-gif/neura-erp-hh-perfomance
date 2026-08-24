@@ -386,8 +386,15 @@ export function buildOfficialRdeFacturaElectronicaXml(
   const dirEmi = opts.emisorDireccion.trim();
   if (dirEmi.length < 1) throw new Error("emisorDireccion es obligatoria.");
 
-  const dep = (opts.emisorDepartamento ?? "1").trim();
-  const depDes = (opts.emisorDepartamentoDescripcion ?? "CAPITAL").trim();
+  // Sin default de Asunción: un DE con el domicilio de otra ciudad es un dato
+  // fiscal incorrecto publicado en cada documento, no un detalle cosmético.
+  const dep = (opts.emisorDepartamento ?? "").trim();
+  const depDes = (opts.emisorDepartamentoDescripcion ?? "").trim();
+  if (!dep || !depDes) {
+    throw new Error(
+      "Falta la ubicación del emisor (gEmis.cDepEmi / dDesDepEmi). Cárguela en Configuración → Facturación electrónica con los códigos de la tabla geográfica DNIT."
+    );
+  }
   const cAct = opts.actividadEconomicaCodigo?.trim() ?? "";
   const dActDes = opts.actividadEconomicaDescripcion?.trim() ?? "";
   if (!cAct || !dActDes) {
@@ -413,15 +420,23 @@ export function buildOfficialRdeFacturaElectronicaXml(
 
   if (opts.emisorDistrito?.trim()) {
     gEmisParts.push(textEl("cDisEmi", opts.emisorDistrito.replace(/\D/g, "").slice(0, 4)));
-    gEmisParts.push(textEl("dDesDisEmi", (opts.emisorDistritoDescripcion ?? "").trim() || "ASUNCION"));
+    const disDes = (opts.emisorDistritoDescripcion ?? "").trim();
+    if (!disDes) {
+      throw new Error(
+        "Falta la descripción del distrito del emisor (gEmis.dDesDisEmi) para el código informado."
+      );
+    }
+    gEmisParts.push(textEl("dDesDisEmi", disDes));
   }
-  if (opts.emisorCiudad?.trim()) {
-    gEmisParts.push(textEl("cCiuEmi", opts.emisorCiudad.replace(/\D/g, "").slice(0, 5)));
-    gEmisParts.push(textEl("dDesCiuEmi", (opts.emisorCiudadDescripcion ?? "").trim() || "ASUNCION"));
-  } else {
-    gEmisParts.push(textEl("cCiuEmi", "1"));
-    gEmisParts.push(textEl("dDesCiuEmi", "ASUNCION (DISTRITO)"));
+  const ciu = (opts.emisorCiudad ?? "").replace(/\D/g, "").slice(0, 5);
+  const ciuDes = (opts.emisorCiudadDescripcion ?? "").trim();
+  if (!ciu || !ciuDes) {
+    throw new Error(
+      "Falta la ciudad del emisor (gEmis.cCiuEmi / dDesCiuEmi). Cárguela en Configuración → Facturación electrónica con los códigos de la tabla geográfica DNIT."
+    );
   }
+  gEmisParts.push(textEl("cCiuEmi", ciu));
+  gEmisParts.push(textEl("dDesCiuEmi", ciuDes));
 
   gEmisParts.push(textEl("dTelEmi", telEmi));
   gEmisParts.push(textEl("dEmailE", opts.emisorEmail.trim()));

@@ -13,7 +13,19 @@ export type FaltanteStock = {
 };
 
 export type ResultadoGuardarVenta =
-  | { success: true; venta: Venta }
+  | {
+      success: true;
+      venta: Venta;
+      /** Factura ERP creada por el puente Venta → Factura. Null si no se generó. */
+      facturaId: string | null;
+      numeroFactura: string | null;
+      /** Presente si la factura no se pudo crear (la venta sí quedó registrada). */
+      facturaWarning: string | null;
+      /** true si el documento electrónico quedó encolado para emisión. */
+      sifenEncolado: boolean;
+      /** Presente si la factura se creó pero el DE no se pudo encolar. */
+      sifenWarning: string | null;
+    }
   | { success: false; error: string; faltantes?: FaltanteStock[] };
 
 /** Modalidad del pedido (instancia gastronómica En lo de Mari). */
@@ -111,7 +123,14 @@ export async function saveVenta(
 
     const json = (await res.json()) as {
       success?: boolean;
-      data?: { venta?: Venta };
+      data?: {
+        venta?: Venta;
+        factura_id?: string | null;
+        numero_factura?: string | null;
+        factura_warning?: string | null;
+        sifen_encolado?: boolean;
+        sifen_warning?: string | null;
+      };
       error?: string;
       faltantes?: FaltanteStock[];
     };
@@ -124,7 +143,15 @@ export async function saveVenta(
       };
     }
 
-    return { success: true, venta: json.data.venta };
+    return {
+      success: true,
+      venta: json.data.venta,
+      facturaId: json.data.factura_id ?? null,
+      numeroFactura: json.data.numero_factura ?? null,
+      facturaWarning: json.data.factura_warning ?? null,
+      sifenEncolado: json.data.sifen_encolado === true,
+      sifenWarning: json.data.sifen_warning ?? null,
+    };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error de red.";
     return { success: false, error: msg };

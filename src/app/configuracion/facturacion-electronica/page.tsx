@@ -47,7 +47,11 @@ function isSifenConfigCompleta(c: EmpresaSifenConfigDTO): boolean {
     Boolean(c.actividad_economica_codigo?.trim()) &&
     Boolean(c.actividad_economica_descripcion?.trim()) &&
     Boolean(c.establecimiento?.trim()) &&
-    Boolean(c.punto_expedicion?.trim());
+    Boolean(c.punto_expedicion?.trim()) &&
+    Boolean(c.departamento_codigo?.trim()) &&
+    Boolean(c.departamento_descripcion?.trim()) &&
+    Boolean(c.ciudad_codigo?.trim()) &&
+    Boolean(c.ciudad_descripcion?.trim());
   return (
     datos &&
     c.activo === true &&
@@ -75,6 +79,12 @@ export default function FacturacionElectronicaSifenPage() {
   const [establecimiento, setEstablecimiento] = useState("");
   const [puntoExpedicion, setPuntoExpedicion] = useState("");
   const [csc, setCsc] = useState("");
+  const [depCodigo, setDepCodigo] = useState("");
+  const [depDescripcion, setDepDescripcion] = useState("");
+  const [disCodigo, setDisCodigo] = useState("");
+  const [disDescripcion, setDisDescripcion] = useState("");
+  const [ciuCodigo, setCiuCodigo] = useState("");
+  const [ciuDescripcion, setCiuDescripcion] = useState("");
   const [activo, setActivo] = useState(true);
   /** Horas desde aprobación SET para permitir cancelación del DE en ERP (config por empresa). */
   const [plazoCancelacionHoras, setPlazoCancelacionHoras] = useState(48);
@@ -129,6 +139,12 @@ export default function FacturacionElectronicaSifenPage() {
         setEstablecimiento(d.establecimiento);
         setPuntoExpedicion(d.punto_expedicion);
         setCsc(d.csc ?? "");
+        setDepCodigo(d.departamento_codigo ?? "");
+        setDepDescripcion(d.departamento_descripcion ?? "");
+        setDisCodigo(d.distrito_codigo ?? "");
+        setDisDescripcion(d.distrito_descripcion ?? "");
+        setCiuCodigo(d.ciudad_codigo ?? "");
+        setCiuDescripcion(d.ciudad_descripcion ?? "");
         setActivo(d.activo);
         setPlazoCancelacionHoras(
           typeof d.sifen_plazo_cancelacion_horas === "number" && Number.isFinite(d.sifen_plazo_cancelacion_horas)
@@ -243,6 +259,12 @@ export default function FacturacionElectronicaSifenPage() {
           actividad_economica_descripcion: actEcoDescripcion.trim(),
           establecimiento: establecimiento.trim(),
           punto_expedicion: puntoExpedicion.trim(),
+          departamento_codigo: depCodigo.trim(),
+          departamento_descripcion: depDescripcion.trim(),
+          distrito_codigo: disCodigo.trim() || null,
+          distrito_descripcion: disDescripcion.trim() || null,
+          ciudad_codigo: ciuCodigo.trim(),
+          ciudad_descripcion: ciuDescripcion.trim(),
           csc: csc.trim() || null,
           activo,
           sifen_plazo_cancelacion_horas: Math.min(8760, Math.max(1, Math.floor(Number(plazoCancelacionHoras)) || 48)),
@@ -276,6 +298,12 @@ export default function FacturacionElectronicaSifenPage() {
           actividad_economica_descripcion: actEcoDescripcion.trim(),
           establecimiento: establecimiento.trim(),
           punto_expedicion: puntoExpedicion.trim(),
+          departamento_codigo: depCodigo.trim(),
+          departamento_descripcion: depDescripcion.trim(),
+          distrito_codigo: disCodigo.trim() || null,
+          distrito_descripcion: disDescripcion.trim() || null,
+          ciudad_codigo: ciuCodigo.trim(),
+          ciudad_descripcion: ciuDescripcion.trim(),
           csc: csc.trim() || null,
           activo,
           certificado_vencimiento: venc,
@@ -728,6 +756,81 @@ export default function FacturacionElectronicaSifenPage() {
                 catálogo en e-kuatia o de tu constancia. Si no coinciden con lo que tiene la SET, devuelve error <span className="font-mono">1261</span>.
               </p>
             </div>
+            <div className="md:col-span-2">
+              <p className="text-xs uppercase tracking-wide font-semibold text-slate-500 mb-1">
+                Ubicación del emisor
+              </p>
+              <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                Códigos de la tabla <span className="font-medium">«Código de Referencia Geográfica»</span> de
+                DNIT (e-Kuatia → Tablas y Codificaciones). SET valida el par código + descripción, así que
+                las descripciones deben copiarse textuales de esa tabla. Van al XML como{" "}
+                <span className="font-mono">cDepEmi</span>, <span className="font-mono">cDisEmi</span> y{" "}
+                <span className="font-mono">cCiuEmi</span>.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={fLabel}>Departamento (código)</label>
+                  <input
+                    className={fInput}
+                    value={depCodigo}
+                    onChange={(e) => setDepCodigo(e.target.value)}
+                    placeholder="12"
+                    inputMode="numeric"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className={fLabel}>Departamento (descripción)</label>
+                  <input
+                    className={fInput}
+                    value={depDescripcion}
+                    onChange={(e) => setDepDescripcion(e.target.value)}
+                    placeholder="CENTRAL"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className={fLabel}>Distrito (código, opcional)</label>
+                  <input
+                    className={fInput}
+                    value={disCodigo}
+                    onChange={(e) => setDisCodigo(e.target.value)}
+                    placeholder="164"
+                    inputMode="numeric"
+                  />
+                </div>
+                <div>
+                  <label className={fLabel}>Distrito (descripción)</label>
+                  <input
+                    className={fInput}
+                    value={disDescripcion}
+                    onChange={(e) => setDisDescripcion(e.target.value)}
+                    placeholder="SAN LORENZO"
+                  />
+                </div>
+                <div>
+                  <label className={fLabel}>Ciudad / localidad (código)</label>
+                  <input
+                    className={fInput}
+                    value={ciuCodigo}
+                    onChange={(e) => setCiuCodigo(e.target.value)}
+                    placeholder="6010"
+                    inputMode="numeric"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className={fLabel}>Ciudad / localidad (descripción)</label>
+                  <input
+                    className={fInput}
+                    value={ciuDescripcion}
+                    onChange={(e) => setCiuDescripcion(e.target.value)}
+                    placeholder="SAN LORENZO"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
             <div>
               <label className={fLabel}>Establecimiento</label>
               <input className={fInput} value={establecimiento} onChange={(e) => setEstablecimiento(e.target.value)} required />
@@ -984,6 +1087,12 @@ export default function FacturacionElectronicaSifenPage() {
                   setActEcoCodigo(cfg.actividad_economica_codigo ?? "");
                   setActEcoDescripcion(cfg.actividad_economica_descripcion ?? "");
                   setEstablecimiento(cfg.establecimiento);
+                  setDepCodigo(cfg.departamento_codigo ?? "");
+                  setDepDescripcion(cfg.departamento_descripcion ?? "");
+                  setDisCodigo(cfg.distrito_codigo ?? "");
+                  setDisDescripcion(cfg.distrito_descripcion ?? "");
+                  setCiuCodigo(cfg.ciudad_codigo ?? "");
+                  setCiuDescripcion(cfg.ciudad_descripcion ?? "");
                   setPuntoExpedicion(cfg.punto_expedicion);
                   setCsc(cfg.csc ?? "");
                   setActivo(cfg.activo);

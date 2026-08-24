@@ -170,7 +170,6 @@ export default function NuevaVentaPage() {
   type VendedorLite = { id: string; nombre: string; porcentaje_comision: number };
   const [vendedores, setVendedores] = useState<VendedorLite[]>([]);
   const [vendedorId, setVendedorId] = useState("");
-  const [vendedoresCargados, setVendedoresCargados] = useState(false);
 
   // Cliente (opcional). Si se selecciona, se envía cliente_id al crear la venta.
   type ClienteLite = { id: string; label: string; ruc: string | null; usa_nota_remision: boolean };
@@ -558,8 +557,6 @@ export default function NuevaVentaPage() {
         }
       } catch {
         if (!cancel) setVendedores([]);
-      } finally {
-        if (!cancel) setVendedoresCargados(true);
       }
     })();
     return () => { cancel = true; };
@@ -832,10 +829,24 @@ export default function NuevaVentaPage() {
       const remisionUrl = `/api/ventas/${v.id}/ticket?tipo=remision&auto=1`;
       // Si se seleccionó cliente, la venta se factura: abrimos la FACTURA (mismo
       // ticket pero con los datos fiscales). Sin cliente, el ticket interno.
-      const docUrl = clienteId ? facturaUrl : ticketUrl;
+      // Con el puente Venta → Factura, lo que se imprime depende de si la venta
+      // generó factura, no de si había cliente: una venta de mostrador sin ficha
+      // también se factura (el receptor va como snapshot en la factura).
+      const docUrl = resultado.facturaId ? facturaUrl : ticketUrl;
       // Intento de apertura automática (popup; el navegador puede bloquearlo).
       // Si pasa, el cajero puede reimprimir el documento desde el listado.
       try { window.open(docUrl, "_blank", "noopener"); } catch {}
+
+      // El DE se emite en segundo plano. Si la factura o el encolado fallaron,
+      // la venta igual quedó registrada — hay que avisarlo, no tragárselo: si
+      // no, el cajero se entera recién cuando falta la factura en el listado.
+      const avisoFiscal = resultado.facturaWarning ?? resultado.sifenWarning;
+      if (avisoFiscal) {
+        setErrorVenta(
+          `${avisoFiscal} La venta ${v.numero_control} quedó registrada; podés reintentar la emisión desde Facturación.`
+        );
+        return;
+      }
       if (generaNota) { try { window.open(remisionUrl, "_blank", "noopener"); } catch {} }
       // Redirige directo al listado de ventas en lugar de mostrar el modal
       // post-venta. El cajero queda libre para registrar otra venta de
@@ -922,30 +933,28 @@ export default function NuevaVentaPage() {
           <SectionTitle>Datos de la venta</SectionTitle>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
-            {/* Vendedor (obligatorio salvo que no haya vendedores activos) */}
-            <div className="relative">
-              <label className={labelClass}>Vendedor</label>
-              <select
-                value={vendedorId}
-                onChange={(e) => setVendedorId(e.target.value)}
-                className={inputClass}
-                disabled={vendedores.length === 0}
-              >
-                <option value="">Sin vendedor</option>
-                {vendedores.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.nombre}
-                    {v.porcentaje_comision > 0 ? ` — ${v.porcentaje_comision}%` : ""}
-                  </option>
-                ))}
-              </select>
-              {vendedoresCargados && vendedores.length === 0 && (
-                <p className="mt-1 text-xs font-medium text-amber-600">
-                  No hay vendedores activos del área Ventas. La venta se registrará “Sin
-                  vendedor”.
-                </p>
-              )}
-            </div>
+            {/* Vendedor: se oculta mientras no haya vendedores activos del área
+                Ventas. Sin opciones para elegir, el campo solo agrega ruido. Al
+                cargar el primer vendedor reaparece solo, y con él la entrada de
+                `vendedor_usuario_id` que alimenta el cálculo de comisiones. */}
+            {vendedores.length > 0 && (
+              <div className="relative">
+                <label className={labelClass}>Vendedor</label>
+                <select
+                  value={vendedorId}
+                  onChange={(e) => setVendedorId(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">Sin vendedor</option>
+                  {vendedores.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.nombre}
+                      {v.porcentaje_comision > 0 ? ` — ${v.porcentaje_comision}%` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Cliente (opcional) */}
             <div ref={clienteContainerRef} className="relative">

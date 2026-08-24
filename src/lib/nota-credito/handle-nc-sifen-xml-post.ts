@@ -129,6 +129,12 @@ export async function handleNcSifenXmlPost(opts: {
     emisorEmail: "facturacion@configurar-empresa.com.py",
     emisorDireccion: loaded.payload.emisor.direccion_fiscal.trim(),
     emisorNumCasa: 0,
+    emisorDepartamento: loaded.payload.emisor.departamento_codigo,
+    emisorDepartamentoDescripcion: loaded.payload.emisor.departamento_descripcion,
+    emisorDistrito: loaded.payload.emisor.distrito_codigo ?? undefined,
+    emisorDistritoDescripcion: loaded.payload.emisor.distrito_descripcion ?? undefined,
+    emisorCiudad: loaded.payload.emisor.ciudad_codigo,
+    emisorCiudadDescripcion: loaded.payload.emisor.ciudad_descripcion,
     actividadEconomicaCodigo: loaded.payload.emisor.actividad_economica_codigo,
     actividadEconomicaDescripcion: loaded.payload.emisor.actividad_economica_descripcion,
   };

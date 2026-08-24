@@ -3,6 +3,7 @@ import type { SifenNotaCreditoPayload } from "./types";
 import type { AmbienteSifen } from "./types";
 import { MSG_CONFIG_TIMBRADO_INVALIDA } from "./validar-timbrado-origen-nc";
 import { validarXmlFirmadoFacturaOrigenParaNc } from "./validar-factura-origen-xml-para-nc";
+import { normalizeUbicacionEmisor } from "./config-validation";
 
 export type LoadNotaCreditoSifenPayloadOpts = {
   /** Si se define, el XML rDE usa este ambiente (p. ej. test con ALLOW_TEST_MODE + pipeline *-test). */
@@ -159,7 +160,7 @@ export async function loadValidatedNotaCreditoSifenPayload(
     supabase
       .from("empresa_sifen_config")
       .select(
-        "ruc, razon_social, direccion_fiscal, timbrado_numero, timbrado_fecha_inicio_vigencia, actividad_economica_codigo, actividad_economica_descripcion, establecimiento, punto_expedicion, csc, activo, ambiente"
+        "ruc, razon_social, direccion_fiscal, timbrado_numero, timbrado_fecha_inicio_vigencia, actividad_economica_codigo, actividad_economica_descripcion, establecimiento, punto_expedicion, departamento_codigo, departamento_descripcion, distrito_codigo, distrito_descripcion, ciudad_codigo, ciudad_descripcion, csc, activo, ambiente"
       )
       .eq("empresa_id", empresaId)
       .maybeSingle(),
@@ -197,6 +198,24 @@ export async function loadValidatedNotaCreditoSifenPayload(
 
   const fx = vOrigen.fiscal;
 
+  const ubi = normalizeUbicacionEmisor({
+    departamento_codigo: cfg.departamento_codigo,
+    departamento_descripcion: cfg.departamento_descripcion,
+    distrito_codigo: cfg.distrito_codigo,
+    distrito_descripcion: cfg.distrito_descripcion,
+    ciudad_codigo: cfg.ciudad_codigo,
+    ciudad_descripcion: cfg.ciudad_descripcion,
+  });
+  if (!ubi.ok) {
+    return {
+      ok: false,
+      error: {
+        status: 400,
+        message: `Configuración SIFEN: ${ubi.error} Configuración → Facturación electrónica.`,
+      },
+    };
+  }
+
   const payload: SifenNotaCreditoPayload = {
     emisor: {
       ruc: String(cfg.ruc ?? "").trim(),
@@ -208,6 +227,12 @@ export async function loadValidatedNotaCreditoSifenPayload(
       actividad_economica_descripcion: fx.actividad_descripcion,
       establecimiento: fx.establecimiento,
       punto_expedicion: fx.punto_expedicion,
+      departamento_codigo: ubi.departamento_codigo,
+      departamento_descripcion: ubi.departamento_descripcion,
+      distrito_codigo: ubi.distrito_codigo,
+      distrito_descripcion: ubi.distrito_descripcion,
+      ciudad_codigo: ubi.ciudad_codigo,
+      ciudad_descripcion: ubi.ciudad_descripcion,
       csc: cfg.csc == null ? null : String(cfg.csc).trim(),
     },
     receptor: {
