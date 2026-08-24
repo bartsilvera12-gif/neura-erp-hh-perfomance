@@ -103,6 +103,7 @@ export default function FacturacionElectronicaSifenPage() {
   const [derivarFill, setDerivarFill] = useState(true);
   const kudeLogoInputId = useId();
   const kudeLogoInputRef = useRef<HTMLInputElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -151,6 +152,18 @@ export default function FacturacionElectronicaSifenPage() {
     load();
   }, [load]);
 
+  /**
+   * El cartel de error vive en la cabecera, pero las acciones que fallan
+   * (subir .p12, cargar contraseña, subir logo KuDE, guardar colores) están
+   * cientos de píxeles más abajo. Sin esto el error se pinta fuera de la
+   * pantalla y la acción parece "no hacer nada".
+   */
+  useEffect(() => {
+    if (!error) return;
+    errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    errorRef.current?.focus({ preventScroll: true });
+  }, [error]);
+
   useEffect(() => {
     if (cfg != null && !isSifenConfigCompleta(cfg)) setEditarFormulario(true);
   }, [cfg]);
@@ -194,6 +207,29 @@ export default function FacturacionElectronicaSifenPage() {
         return;
       }
       const { iso: venc } = vencRes;
+
+      // El campo de contraseña siempre nace vacío (el servidor nunca devuelve el
+      // secreto), así que "vacío" significa "no cambiar". Cuando todavía no hay
+      // ninguna contraseña guardada eso equivale a guardar un certificado
+      // inutilizable y reportar éxito. Cortamos antes de que eso pase.
+      const tieneP12 = Boolean(cfg?.certificado_path?.trim());
+      const pwGuardada = Boolean(cfg?.has_certificado_password);
+      const pwTipeada = nuevaPassword.trim().length > 0;
+
+      if (limpiarPassword && pwTipeada) {
+        setError(
+          "Escribiste una contraseña nueva pero también está tildado «Eliminar contraseña guardada en el servidor». " +
+            "Destildá esa casilla para guardar la contraseña, o borrá el campo si querés eliminarla."
+        );
+        return;
+      }
+      if (tieneP12 && !pwGuardada && !pwTipeada && !limpiarPassword) {
+        setError(
+          "Hay un certificado .p12 cargado pero ninguna contraseña guardada, y el campo «Contraseña del certificado» quedó vacío. " +
+            "Escribila para poder firmar documentos electrónicos."
+        );
+        return;
+      }
 
       if (!cfg) {
         const body: Record<string, unknown> = {
@@ -464,7 +500,15 @@ export default function FacturacionElectronicaSifenPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3">{error}</div>
+        <div
+          ref={errorRef}
+          role="alert"
+          aria-live="assertive"
+          tabIndex={-1}
+          className="rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3"
+        >
+          {error}
+        </div>
       )}
       {success && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm px-4 py-3">
