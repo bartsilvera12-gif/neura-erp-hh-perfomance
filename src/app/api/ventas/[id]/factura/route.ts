@@ -60,8 +60,7 @@ function pageShell(title: string, bodyInner: string): NextResponse {
 }
 
 /** Página que se auto-refresca esperando la aprobación de la SET. */
-function waitingPage(numeroFac: string, refreshUrl: string, origin: string, facturaId: string): NextResponse {
-  void origin;
+function waitingPage(numeroFac: string, refreshUrl: string, facturaId: string): NextResponse {
   const inner =
     `<div style="width:44px;height:44px;margin:0 auto 20px;border:4px solid #e2e8f0;` +
     `border-top-color:#0ea5e9;border-radius:50%;animation:sp 1s linear infinite;"></div>` +
@@ -79,11 +78,14 @@ function waitingPage(numeroFac: string, refreshUrl: string, origin: string, fact
 function htmlPage(
   title: string,
   mensaje: string,
-  opts: { tone: "error" | "wait"; facturaId: string; origin: string }
+  opts: { tone: "error" | "wait"; facturaId: string }
 ): NextResponse {
   const color = opts.tone === "error" ? "#dc2626" : "#0ea5e9";
   const icon = opts.tone === "error" ? "&#9888;" : "&#8987;";
-  const detalleUrl = new URL(`/facturas/${opts.facturaId}`, opts.origin).toString();
+  // Ruta RELATIVA: el navegador la resuelve contra su barra de direcciones (el
+  // dominio público). Detrás del proxy de Coolify, `request.url` apunta a
+  // localhost:3000 (interno) y una URL absoluta desde ahí es inalcanzable.
+  const detalleUrl = `/facturas/${opts.facturaId}`;
   const inner =
     `<div style="font-size:40px;line-height:1;margin-bottom:12px;color:${color};">${icon}</div>` +
     `<h1 style="font-size:18px;margin:0 0 10px;">${title}</h1>` +
@@ -269,8 +271,14 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
       // Aprobado por SET → el legal es el KuDE. Redirigimos ahí en vez de
       // imprimir un comprobante interno que ya no hace falta.
       if (estadoDe === "aprobado") {
-        const kude = new URL(`/api/facturas/${facturaIdVenta}/sifen/kude`, origin);
-        return NextResponse.redirect(kude, { status: 302 });
+        // Location RELATIVO a propósito: el navegador lo resuelve contra el
+        // dominio público de su barra de direcciones. `origin` del request es
+        // el interno (localhost:3000 tras el proxy) y rompe con connection
+        // refused si se usa como URL absoluta.
+        return new NextResponse(null, {
+          status: 302,
+          headers: { Location: `/api/facturas/${facturaIdVenta}/sifen/kude` },
+        });
       }
 
       const numQ = await ctx.supabase
@@ -290,7 +298,7 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
           estadoDe === "rechazado"
             ? `La SET rechazó la factura ${numeroFac}. ${decodeSet(feErr?.error) || "Revisá el detalle de la factura y reintentá."}`
             : `La factura ${numeroFac} fue cancelada.`,
-          { tone: "error", facturaId: facturaIdVenta, origin });
+          { tone: "error", facturaId: facturaIdVenta });
       }
 
       // Procesando (borrador/generado/firmado/enviado): SET tarda segundos.
@@ -301,9 +309,10 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
       const tick = parseInt(url.searchParams.get("t") ?? "0", 10) || 0;
       const MAX_TICKS = 24; // ~48s a 2s por refresh
       if (tick < MAX_TICKS) {
-        const next = new URL(request.url);
-        next.searchParams.set("t", String(tick + 1));
-        return waitingPage(numeroFac, next.toString(), origin, facturaIdVenta);
+        const nextParams = new URLSearchParams(url.searchParams);
+        nextParams.set("t", String(tick + 1));
+        const refreshPath = `${url.pathname}?${nextParams.toString()}`;
+        return waitingPage(numeroFac, refreshPath, facturaIdVenta);
       }
       // Se agotó la espera: SET sigue procesando. No es error; el KuDE aparece
       // solo en el detalle cuando apruebe.
@@ -312,7 +321,7 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
         `La factura ${numeroFac} se está emitiendo y la SET todavía no respondió. ` +
           `El documento legal (KuDE) aparece en el detalle de la factura apenas se apruebe; ` +
           `no hace falta volver a vender.`,
-        { tone: "wait", facturaId: facturaIdVenta, origin });
+        { tone: "wait", facturaId: facturaIdVenta });
     }
 
     return borrador(
