@@ -287,8 +287,13 @@ export function buildOfficialRdeNotaCreditoElectronicaXml(
   } else {
     const doc = (receptor.documento ?? "").replace(/\s/g, "").trim();
     if (!doc) throw new Error("Receptor sin RUC: se requiere documento (CI) en cliente.");
+    /** tiTiOpe (DE_Types v150): 1=B2B, 2=B2C, 3=B2G, 4=B2F. Un receptor no
+     *  contribuyente (iNatRec=2) con documento nacional exige B2C, no B2B:
+     *  con iTiOpe=1 la SET rechaza con 0362 "El tipo de operación no
+     *  compatible con la naturaleza del receptor". Mismo criterio que la
+     *  rama de receptor extranjero, que usa B2F. */
     recParts.push(textEl("iNatRec", "2"));
-    recParts.push(textEl("iTiOpe", "1"));
+    recParts.push(textEl("iTiOpe", "2"));
     recParts.push(textEl("cPaisRec", "PRY"));
     recParts.push(textEl("dDesPaisRe", "Paraguay"));
     recParts.push(textEl("iTipIDRec", "1"));
