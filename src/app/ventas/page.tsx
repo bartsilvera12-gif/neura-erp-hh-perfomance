@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { RotateCcw, Printer, FileText, Truck } from "lucide-react";
+import { RotateCcw, Printer, FileText, Truck, ScrollText } from "lucide-react";
 import EdgeScrollArea from "@/components/ui/EdgeScrollArea";
 import { FancySelect } from "@/components/ui/FancySelect";
 import MobileFab from "@/components/ui/MobileFab";
@@ -334,6 +334,18 @@ export default function VentasPage() {
                               Devolver
                             </button>
                           )}
+                          {/* Si la venta generó factura electrónica, link al detalle
+                              (anular ante SET / nota de crédito / imprimir KuDE). */}
+                          {v.factura_id && (
+                            <Link
+                              href={`/facturas/${v.factura_id}`}
+                              className={`${BTN_ACCION} border-[#0EA5E9]/40 bg-[#0EA5E9]/[0.08] text-[#0284C7] hover:border-[#0EA5E9]/60 hover:bg-[#0EA5E9]/[0.16]`}
+                              title="Ver factura electrónica (anular, nota de crédito, imprimir)"
+                            >
+                              <ScrollText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                              Ver factura
+                            </Link>
+                          )}
                           {/* Excluyentes: con cliente la venta se factura; sin cliente solo lleva ticket interno. */}
                           {v.cliente_id ? (
                             <a
@@ -341,10 +353,10 @@ export default function VentasPage() {
                               target="_blank"
                               rel="noopener"
                               className={`${BTN_ACCION} border-[#4FAEB2]/40 bg-[#4FAEB2]/[0.08] text-[#3F8E91] hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/[0.16]`}
-                              title="Factura autoimpresor (formato ticket)"
+                              title="Imprimir factura / KuDE"
                             >
                               <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                              Factura
+                              Imprimir
                             </a>
                           ) : (
                             <a

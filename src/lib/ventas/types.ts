@@ -58,6 +58,9 @@ export interface Venta {
    */
   cliente_id?: string | null;
 
+  /** Factura ERP generada por el puente venta→factura (para saltar al detalle). */
+  factura_id?: string | null;
+
   /** La venta emite nota de remisión (documento no fiscal). */
   genera_nota_remision?: boolean;
   /** Número de nota de remisión (NR-XXXXXX) si genera_nota_remision. */
