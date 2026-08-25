@@ -105,11 +105,10 @@ const MENU_STRUCTURE: MenuItem[] = [
   //   href: "/dashboard/monitoreo", icon: Activity,
   // },
   { key: "ventas", slug: "ventas", label: "Caja", href: "/ventas", icon: ShoppingCart },
-  // Pedidos: vendedor arma pedidos en el salon; este listado es gestion
-  // (ver/editar/cancelar). El cobro se hace desde la Caja (/ventas), que
-  // muestra el listado "Pedidos por cobrar" embebido. Slug 'ventas' para
-  // heredar acceso del modulo. La ruta vieja /consulta redirige a /pedidos.
-  { key: "pedidos", slug: "ventas", label: "Pedidos", href: "/pedidos", icon: Receipt },
+  // Pedidos: ocultado del sidebar a pedido (para todos los usuarios). La ruta
+  // /pedidos sigue existiendo pero no se muestra en el menu. El cobro/facturacion
+  // se hace desde la Caja (/ventas).
+  // { key: "pedidos", slug: "ventas", label: "Pedidos", href: "/pedidos", icon: Receipt },
   // Presupuestos: cotizaciones al cliente con PDF (logo + membrete Ferreteria
   // Republica). Reactivado a pedido.
   { key: "presupuestos", slug: "presupuestos", label: "Presupuestos", href: "/presupuestos", icon: FileText },
