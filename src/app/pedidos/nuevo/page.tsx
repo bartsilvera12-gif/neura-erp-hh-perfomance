@@ -621,10 +621,15 @@ export default function NuevoPedidoPage() {
                             <Minus className="mx-auto h-3.5 w-3.5" />
                           </button>
                           <input
-                            type="number"
-                            min={1}
-                            value={it.cantidad}
-                            onChange={(e) => updateCart(it.producto_id, { cantidad: Math.max(1, parseInt(e.target.value) || 1) })}
+                            type="text"
+                            inputMode="numeric"
+                            value={it.cantidad === 0 ? "" : String(it.cantidad)}
+                            onChange={(e) => {
+                              const d = e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+                              updateCart(it.producto_id, { cantidad: d === "" ? 0 : parseInt(d, 10) });
+                            }}
+                            onBlur={() => { if (!it.cantidad || it.cantidad < 1) updateCart(it.producto_id, { cantidad: 1 }); }}
+                            onFocus={(e) => e.target.select()}
                             className="h-8 w-12 text-center text-sm tabular-nums outline-none"
                           />
                           <button onClick={() => changeCantidad(it.producto_id, 1)} className="h-8 w-8 rounded-r-md text-slate-500 hover:bg-slate-100">
@@ -635,10 +640,14 @@ export default function NuevoPedidoPage() {
                       {/* Precio unitario */}
                       <td className="px-3 py-3 text-right">
                         <input
-                          type="number"
-                          min={0}
-                          value={it.precio_venta}
-                          onChange={(e) => updateCart(it.producto_id, { precio_venta: Math.max(0, Number(e.target.value) || 0) })}
+                          type="text"
+                          inputMode="numeric"
+                          value={it.precio_venta === 0 ? "" : String(it.precio_venta)}
+                          onChange={(e) => {
+                            const d = e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+                            updateCart(it.producto_id, { precio_venta: d === "" ? 0 : parseInt(d, 10) });
+                          }}
+                          onFocus={(e) => e.target.select()}
                           className="h-8 w-28 rounded-md border border-slate-200 bg-white px-2 text-right text-sm tabular-nums"
                         />
                       </td>

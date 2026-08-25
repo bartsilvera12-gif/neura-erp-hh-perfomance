@@ -2211,25 +2211,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          {usuarios.length > 0 && (
-            <div className="flex flex-col gap-1.5 sm:items-end">
-              <span className="text-[10px] uppercase tracking-wide" style={{ color: Z.muted }}>
-                Viendo como
-              </span>
-              <select
-                value={usuarioId ?? ""}
-                onChange={(e) => handleUsuarioChange(parseInt(e.target.value, 10))}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-offset-0"
-                style={{ backgroundColor: Z.surface, color: Z.text, borderColor: "rgba(255,255,255,0.12)" }}
-              >
-                {usuarios.map((u) => (
-                  <option key={u.id} value={u.id} style={{ backgroundColor: Z.surface }}>
-                    {u.nombre} ({u.nivel})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 p-1" style={{ backgroundColor: Z.surface }}>
             {PERIODO_OPTS.map((p) => (
               <button
