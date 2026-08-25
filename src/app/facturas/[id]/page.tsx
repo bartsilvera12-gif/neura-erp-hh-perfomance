@@ -118,12 +118,27 @@ function FacturaDetalleInner() {
     };
   }, [id]);
 
+  // Estado del DE: si está aprobado o cancelado, "imprimir" debe entregar el
+  // KuDE legal (PDF), no la página web.
+  const estadoDe = resumen?.factura_electronica?.estado_sifen ?? null;
+  const kudeDisponible = estadoDe === "aprobado" || estadoDe === "cancelado";
+
+  const imprimir = useCallback(() => {
+    if (kudeDisponible && id) {
+      // Ruta RELATIVA: detrás del proxy, request.url es interno; el navegador
+      // resuelve la relativa contra el dominio público.
+      window.open(`/api/facturas/${id}/sifen/kude`, "_blank", "noopener");
+    } else {
+      window.print();
+    }
+  }, [kudeDisponible, id]);
+
   useEffect(() => {
-    if (searchParams?.get("print") === "1" && factura && !loadingF) {
-      const t = setTimeout(() => window.print(), 400);
+    if (searchParams?.get("print") === "1" && factura && !loadingF && !loadingS) {
+      const t = setTimeout(() => imprimir(), 400);
       return () => clearTimeout(t);
     }
-  }, [searchParams, factura, loadingF]);
+  }, [searchParams, factura, loadingF, loadingS, imprimir]);
 
   if (!id) {
     return null;
@@ -180,10 +195,10 @@ function FacturaDetalleInner() {
         <div className="flex gap-2 print:hidden">
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={imprimir}
             className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
           >
-            Imprimir
+            {kudeDisponible ? "Imprimir KuDE" : "Imprimir"}
           </button>
         </div>
       </div>

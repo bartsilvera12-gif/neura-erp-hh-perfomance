@@ -149,9 +149,14 @@ export async function GET(
       });
     }
 
-    if (String(feRow.estado_sifen) !== "aprobado") {
+    // El KuDE se genera desde el XML firmado, que existe una vez aprobado. Un DE
+    // cancelado conserva su XML firmado y su CDC: el documento fue legalmente
+    // emitido y luego anulado, así que su KuDE sigue siendo imprimible (para
+    // archivo / entregar copia con la marca de cancelado).
+    const estadoKude = String(feRow.estado_sifen);
+    if (estadoKude !== "aprobado" && estadoKude !== "cancelado") {
       return NextResponse.json(
-        errorResponse("El KuDE solo está disponible con SIFEN en estado «aprobado»."),
+        errorResponse("El KuDE solo está disponible con el documento electrónico aprobado o cancelado."),
         { status: 403 }
       );
     }
