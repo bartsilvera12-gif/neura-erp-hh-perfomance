@@ -67,3 +67,19 @@ export async function updateEntidadBancaria(
     return { ok: false, error: e instanceof Error ? e.message : "Error de red" };
   }
 }
+
+export async function deleteEntidadBancaria(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const r = await fetch("/api/entidades-bancarias", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ id }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j?.success) return { ok: false, error: j?.error ?? `Error ${r.status}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error de red" };
+  }
+}

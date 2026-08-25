@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { getProveedores } from "@/lib/proveedores/storage";
+import { getProveedores, deleteProveedor } from "@/lib/proveedores/storage";
 import ExportExcelButton from "@/components/ui/ExportExcelButton";
 import ImportExcelButton from "@/components/ui/ImportExcelButton";
 import { useIsAdmin } from "@/lib/auth/use-is-admin";
@@ -29,6 +29,13 @@ export default function ProveedoresPage() {
       cancel = true;
     };
   }, [refreshKey]);
+
+  async function borrarProveedor(p: Proveedor) {
+    if (!confirm(`¿Borrar el proveedor "${p.nombre}"? Esta acción no se puede deshacer.`)) return;
+    const res = await deleteProveedor(p.id);
+    if (!res.ok) { alert(res.error); return; }
+    setLista((prev) => prev.filter((x) => x.id !== p.id));
+  }
 
   const filtradas = useMemo(() => {
     if (!busqueda.trim()) return lista;
@@ -154,12 +161,23 @@ export default function ProveedoresPage() {
                       </span>
                     </td>
                     <td className="py-3">
-                      <Link
-                        href={`/proveedores/${p.id}/editar`}
-                        className="text-sm font-medium text-sky-600 hover:underline"
-                      >
-                        Editar
-                      </Link>
+                      <div className="flex gap-3">
+                        <Link
+                          href={`/proveedores/${p.id}/editar`}
+                          className="text-sm font-medium text-sky-600 hover:underline"
+                        >
+                          Editar
+                        </Link>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => void borrarProveedor(p)}
+                            className="text-sm font-medium text-red-600 hover:underline"
+                          >
+                            Borrar
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

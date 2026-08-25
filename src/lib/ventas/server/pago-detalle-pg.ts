@@ -118,6 +118,34 @@ export async function updateEntidadBancaria(
 }
 
 /**
+ * Borra una entidad bancaria. Si está referenciada por pagos/cobros, Postgres
+ * rechaza con FK (23503) y devolvemos { inUse: true } para que la UI sugiera
+ * desactivarla en vez de borrarla — no se pierde el histórico de cobros.
+ */
+export async function deleteEntidadBancaria(
+  schemaRaw: string,
+  empresaId: string,
+  id: string
+): Promise<{ ok: true } | { ok: false; inUse: boolean; message: string }> {
+  const schema = assertAllowedChatDataSchema(schemaRaw);
+  const t = quoteSchemaTable(schema, "entidades_bancarias");
+  try {
+    await pool().query(`DELETE FROM ${t} WHERE id=$1::uuid AND empresa_id=$2::uuid`, [id, empresaId]);
+    return { ok: true };
+  } catch (e) {
+    const code = (e as { code?: string })?.code;
+    if (code === "23503") {
+      return {
+        ok: false,
+        inUse: true,
+        message: "La entidad tiene cobros o pagos asociados. Desactivala en vez de borrarla para conservar el histórico.",
+      };
+    }
+    return { ok: false, inUse: false, message: e instanceof Error ? e.message : "Error al borrar la entidad." };
+  }
+}
+
+/**
  * Inserta 1 detalle de cobro para una venta. Devuelve el id, o null si falla
  * (best-effort: el caller ignora el error para no romper la venta).
  */

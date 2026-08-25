@@ -69,6 +69,20 @@ export async function createProveedor(datos: NuevoProveedorInput): Promise<{ ok:
   }
 }
 
+export async function deleteProveedor(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`/api/proveedores/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json?.success) return { ok: false, error: json?.error ?? `Error ${res.status}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error de red" };
+  }
+}
+
 export async function updateProveedor(
   id: string,
   datos: Partial<NuevoProveedorInput> & { categoria_ids?: string[] }

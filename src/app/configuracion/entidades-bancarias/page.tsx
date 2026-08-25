@@ -6,6 +6,7 @@ import {
   getEntidadesBancarias,
   createEntidadBancaria,
   updateEntidadBancaria,
+  deleteEntidadBancaria,
   type EntidadBancaria,
   type TipoEntidad,
 } from "@/lib/entidades/storage";
@@ -81,6 +82,13 @@ export default function EntidadesBancariasPage() {
     if (!res.ok) setError(res.error); else await reload();
   }
 
+  async function borrar(en: EntidadBancaria) {
+    if (!confirm(`¿Borrar la entidad "${en.nombre}"? Esta acción no se puede deshacer.`)) return;
+    setError(null);
+    const res = await deleteEntidadBancaria(en.id);
+    if (!res.ok) setError(res.error); else await reload();
+  }
+
   return (
     <div className="mx-auto w-full max-w-4xl space-y-8 px-4 pb-10 sm:px-6 lg:px-8">
       <div>
@@ -147,9 +155,17 @@ export default function EntidadesBancariasPage() {
                   ) : tipoLabel(en.tipo)}
                 </td>
                 <td className="py-3 pr-4">
-                  <button type="button" onClick={() => toggleActivo(en)}
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${en.activo ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                    {en.activo ? "Sí" : "No"}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={en.activo}
+                    onClick={() => toggleActivo(en)}
+                    title={en.activo ? "Activa — clic para desactivar" : "Inactiva — clic para activar"}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${en.activo ? "bg-emerald-500" : "bg-slate-300"}`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${en.activo ? "translate-x-5" : "translate-x-0.5"}`}
+                    />
                   </button>
                 </td>
                 <td className="py-3">
@@ -159,7 +175,10 @@ export default function EntidadesBancariasPage() {
                       <button type="button" onClick={() => setEditId(null)} className="text-slate-500 hover:underline">Cancelar</button>
                     </div>
                   ) : (
-                    <button type="button" onClick={() => startEdit(en)} className="text-sky-600 font-medium hover:underline">Editar</button>
+                    <div className="flex gap-3">
+                      <button type="button" onClick={() => startEdit(en)} className="text-sky-600 font-medium hover:underline">Editar</button>
+                      <button type="button" onClick={() => void borrar(en)} className="text-red-600 font-medium hover:underline">Borrar</button>
+                    </div>
                   )}
                 </td>
               </tr>
