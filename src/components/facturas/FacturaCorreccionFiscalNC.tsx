@@ -75,7 +75,7 @@ function nextNcSifenPasoReal(
   url: string;
   label: string;
 } | null {
-  if (!opts.deAprobado || opts.puedeCancelarDe) return null;
+  if (!opts.deAprobado) return null;
   if (nc.estado_erp === "anulada_borrador" || nc.estado_erp === "aprobada" || nc.estado_erp === "rechazada") {
     return null;
   }
@@ -109,7 +109,7 @@ function nextNcSifenPasoTestOverride(
   url: string;
   label: string;
 } | null {
-  if (!opts.deAprobado || opts.puedeCancelarDe) return null;
+  if (!opts.deAprobado) return null;
   if (nc.estado_erp === "anulada_borrador" || nc.estado_erp === "aprobada" || nc.estado_erp === "rechazada") {
     return null;
   }
@@ -380,7 +380,7 @@ export function FacturaCorreccionFiscalNC({
         </details>
       )}
 
-      {!puedeCancelarDe && deAprobado && estado !== "Anulado" && bloqueoTimbradoOrigen && (
+      {deAprobado && estado !== "Anulado" && bloqueoTimbradoOrigen && (
         <div
           className="rounded-lg border-2 border-amber-700 bg-amber-50 px-3 py-3 text-sm text-amber-950 shadow-sm"
           role="alert"
@@ -398,7 +398,7 @@ export function FacturaCorreccionFiscalNC({
         </div>
       )}
 
-      {!puedeCancelarDe && deAprobado && estado !== "Anulado" && puedeCrear ? (
+      {deAprobado && estado !== "Anulado" && puedeCrear ? (
         <div className="space-y-2">
           <button
             type="button"
@@ -415,7 +415,7 @@ export function FacturaCorreccionFiscalNC({
         </div>
       ) : null}
 
-      {ncRechazoMasReciente && deAprobado && !puedeCancelarDe && (
+      {ncRechazoMasReciente && deAprobado && (
         <div
           className="rounded-lg border-2 border-red-600 bg-red-50 p-4 space-y-3 shadow-sm"
           role="alert"

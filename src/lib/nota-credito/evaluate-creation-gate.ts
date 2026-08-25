@@ -1,7 +1,5 @@
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
 import {
-  buildSifenCancelacionPreview,
-  normalizePlazoCancelacionHoras,
 } from "@/lib/sifen/sifen-cancelacion-rules";
 import { validarXmlFirmadoFacturaOrigenParaNc } from "@/lib/sifen/validar-factura-origen-xml-para-nc";
 
@@ -103,49 +101,22 @@ export async function evaluateNotaCreditoCreationGate(
     return { puede_crear: false, motivo_bloqueo: vGate.message };
   }
 
-  const [{ data: cfg }, pagosRes] = await Promise.all([
-    supabase
-      .from("empresa_sifen_config")
-      .select("sifen_plazo_cancelacion_horas")
-      .eq("empresa_id", empresaId)
-      .maybeSingle(),
-    supabase.from("pagos").select("monto").eq("factura_id", facturaId).eq("empresa_id", empresaId),
-  ]);
+  const pagosRes = await supabase
+    .from("pagos")
+    .select("monto")
+    .eq("factura_id", facturaId)
+    .eq("empresa_id", empresaId);
 
   if (pagosRes.error) {
     return { puede_crear: false, motivo_bloqueo: pagosRes.error.message };
   }
   const pagosRows = (pagosRes.data ?? []) as { monto?: unknown }[];
-  const pagosCount = pagosRows.length;
   const sumaPagos = pagosRows.reduce((s, r) => s + num(r.monto), 0);
 
-  const plazo = normalizePlazoCancelacionHoras(
-    cfg != null ? (cfg as { sifen_plazo_cancelacion_horas?: unknown }).sifen_plazo_cancelacion_horas : 48
-  );
-
-  const preview = buildSifenCancelacionPreview({
-    estadoSifen,
-    sifenAprobadoAtIso:
-      (feRow as { sifen_aprobado_at?: string | null }).sifen_aprobado_at == null
-        ? null
-        : String((feRow as { sifen_aprobado_at?: string | null }).sifen_aprobado_at),
-    sifenCanceladoAtIso:
-      (feRow as { sifen_cancelado_at?: string | null }).sifen_cancelado_at == null
-        ? null
-        : String((feRow as { sifen_cancelado_at?: string | null }).sifen_cancelado_at),
-    plazoHoras: plazo,
-    pagosCount,
-    nowMs: Date.now(),
-  });
-
-  if (preview.puede_cancelar) {
-    return {
-      puede_crear: false,
-      motivo_bloqueo:
-        "Todavía podés cancelar el DE dentro del plazo. Usá cancelación en lugar de nota de crédito.",
-    };
-  }
-
+  // La nota de crédito está disponible siempre en facturas aprobadas, sin
+  // depender de la ventana de cancelación (48 h). La anulación ante SET y la NC
+  // son caminos paralelos: anular borra todo el documento dentro de las 48 h; la
+  // NC ajusta (total o parcial) en cualquier momento del período fiscal.
   const esperadoSaldo = Math.max(0, monto - sumaPagos);
   if (Math.abs(saldo - esperadoSaldo) > 0.02) {
     return {
