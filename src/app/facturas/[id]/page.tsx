@@ -30,6 +30,29 @@ type SifenResumen = {
   cancelacion: SifenCancelacionPreviewDTO | null;
 };
 
+/** Chip de estado comercial con color por estado. */
+function EstadoBadge({ estado }: { estado: string | null }) {
+  const e = (estado ?? "").toLowerCase();
+  const cfg: Record<string, string> = {
+    anulado: "bg-rose-50 text-rose-700 ring-rose-200",
+    cancelado: "bg-rose-50 text-rose-700 ring-rose-200",
+    pagado: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+    pendiente: "bg-amber-50 text-amber-700 ring-amber-200",
+  };
+  const cls = cfg[e] ?? "bg-slate-100 text-slate-600 ring-slate-200";
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${cls}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {estado ?? "—"}
+    </span>
+  );
+}
+
+function fmtMoneda(v: number, moneda: string): string {
+  const label = moneda === "USD" ? "USD" : "Gs.";
+  return `${label} ${Number(v || 0).toLocaleString(moneda === "USD" ? "en-US" : "es-PY")}`;
+}
+
 function formatFecha(str: string) {
   if (!str) return "—";
   const [y, m, d] = str.split("-");
@@ -172,71 +195,81 @@ function FacturaDetalleInner() {
     );
   }
 
-  const monedaLabel = factura.moneda === "USD" ? "USD" : "Gs.";
+  const saldoCero = Number(factura.saldo || 0) <= 0;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 py-6 px-4 sm:px-6 print:px-0 w-full">
-      <div className="flex flex-wrap items-start justify-between gap-4 print:hidden">
-        <div>
-          <Link
-            href={`/gestion-clientes?cliente=${encodeURIComponent(factura.cliente_id)}`}
-            className="text-xs font-medium text-[#0EA5E9] hover:underline"
-          >
-            ← Gestión de clientes
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">Factura {factura.numero_factura}</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Cliente:{" "}
-            <Link href={`/clientes/${factura.cliente_id}`} className="text-[#0EA5E9] font-medium hover:underline">
-              {factura.cliente_display ?? "Ver cliente"}
-            </Link>
-          </p>
-        </div>
-        <div className="flex gap-2 print:hidden">
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 print:px-0">
+      {/* Encabezado */}
+      <div className="print:hidden">
+        <Link
+          href={`/gestion-clientes?cliente=${encodeURIComponent(factura.cliente_id)}`}
+          className="inline-flex items-center gap-1 text-xs font-medium text-[#0EA5E9] transition-colors hover:text-[#0284C7]"
+        >
+          ← Gestión de clientes
+        </Link>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                Factura {factura.numero_factura}
+              </h1>
+              <EstadoBadge estado={factura.estado} />
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              Cliente:{" "}
+              <Link
+                href={`/clientes/${factura.cliente_id}`}
+                className="font-medium text-[#0EA5E9] hover:underline"
+              >
+                {factura.cliente_display ?? "Ver cliente"}
+              </Link>
+            </p>
+          </div>
           <button
             type="button"
             onClick={imprimir}
-            className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#0EA5E9] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#0284C7]"
           >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z" />
+            </svg>
             {kudeDisponible ? "Imprimir KuDE" : "Imprimir"}
           </button>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5 space-y-3">
-        <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Resumen comercial</h2>
-        <dl className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+      {/* Resumen comercial */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center sm:justify-between">
+          {/* Monto destacado */}
           <div>
-            <dt className="text-slate-400 text-xs">Emisión</dt>
-            <dd className="font-medium text-slate-800">{formatFecha(factura.fecha)}</dd>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Monto total</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">
+              {fmtMoneda(factura.monto, factura.moneda)}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Saldo:{" "}
+              <span className={`font-semibold tabular-nums ${saldoCero ? "text-emerald-600" : "text-amber-600"}`}>
+                {fmtMoneda(factura.saldo, factura.moneda)}
+              </span>
+            </p>
           </div>
-          <div>
-            <dt className="text-slate-400 text-xs">Vencimiento</dt>
-            <dd className="font-medium text-slate-800">{formatFecha(factura.fecha_vencimiento)}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-400 text-xs">Tipo</dt>
-            <dd className="font-medium text-slate-800 capitalize">{factura.tipo}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-400 text-xs">Monto</dt>
-            <dd className="font-semibold text-slate-900 tabular-nums">
-              {monedaLabel}{" "}
-              {factura.monto.toLocaleString(factura.moneda === "USD" ? "en-US" : "es-PY")}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-slate-400 text-xs">Saldo</dt>
-            <dd className="font-semibold text-slate-900 tabular-nums">
-              {monedaLabel}{" "}
-              {factura.saldo.toLocaleString(factura.moneda === "USD" ? "en-US" : "es-PY")}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-slate-400 text-xs">Estado</dt>
-            <dd className="font-medium text-slate-800">{factura.estado}</dd>
-          </div>
-        </dl>
+          {/* Meta */}
+          <dl className="grid grid-cols-3 gap-x-8 gap-y-3 text-sm sm:text-right">
+            <div className="text-left sm:text-right">
+              <dt className="text-[11px] uppercase tracking-wide text-slate-400">Emisión</dt>
+              <dd className="mt-0.5 font-medium text-slate-800">{formatFecha(factura.fecha)}</dd>
+            </div>
+            <div className="text-left sm:text-right">
+              <dt className="text-[11px] uppercase tracking-wide text-slate-400">Vencimiento</dt>
+              <dd className="mt-0.5 font-medium text-slate-800">{formatFecha(factura.fecha_vencimiento)}</dd>
+            </div>
+            <div className="text-left sm:text-right">
+              <dt className="text-[11px] uppercase tracking-wide text-slate-400">Tipo</dt>
+              <dd className="mt-0.5 font-medium capitalize text-slate-800">{factura.tipo}</dd>
+            </div>
+          </dl>
+        </div>
       </div>
 
       <FacturaElectronicaPanel
