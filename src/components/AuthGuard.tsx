@@ -41,6 +41,7 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [access, setAccess] = useState<ModuleAccess | null>(null);
   const [blockedSlug, setBlockedSlug] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
   const { sidebarReady } = useBoot();
 
   const isPublic = useMemo(
@@ -113,10 +114,12 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading || isPublic || !access || !pathname) {
       setBlockedSlug(null);
+      setRedirecting(false);
       return;
     }
 
     if (pathname.startsWith("/admin") && !access.superAdmin) {
+      setRedirecting(true);
       router.replace(
         firstAccessibleHref(access.slugs, {
           superAdmin: false,
@@ -136,27 +139,31 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
     ) {
       // Si el usuario tiene algún otro módulo accesible (p. ej. un vendedor con
       // solo Caja que aterriza en "/"/dashboard), mandarlo directo ahí en vez de
-      // mostrar la pantalla de "módulo no habilitado".
+      // mostrar la pantalla de "módulo no habilitado". Mostramos el loader
+      // mientras redirige para que no aparezca ni un flash del módulo bloqueado.
       const fallback = firstAccessibleHref(access.slugs, {
         superAdmin: access.superAdmin,
         inactiveSlugs: access.inactiveSlugs,
         strict: access.strict,
       });
       if (fallback && fallback !== "/login" && fallback !== pathname) {
+        setRedirecting(true);
         router.replace(fallback);
         setBlockedSlug(null);
         return;
       }
       setBlockedSlug(slug);
+      setRedirecting(false);
       return;
     }
     setBlockedSlug(null);
+    setRedirecting(false);
   }, [pathname, access, loading, isPublic, router]);
 
   // Overlay de carga: el loader queda encima MIENTRAS children se montan en background.
   // Así el sidebar/dashboard ya están fetcheando sus datos al desaparecer el loader.
   // Esperamos a que termine la auth Y a que el Sidebar reporte que cargó sus módulos.
-  const showLoader = !isPublic && (loading || !sidebarReady);
+  const showLoader = !isPublic && (loading || !sidebarReady || redirecting);
 
   if (blockedSlug && access) {
     const fallback = firstAccessibleHref(access.slugs, {

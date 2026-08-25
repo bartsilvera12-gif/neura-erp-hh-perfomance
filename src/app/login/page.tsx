@@ -5,6 +5,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { signIn } from "@/lib/auth";
+import { clearModuleAccessCache, getModuleAccessCached } from "@/lib/modulos/module-access-cache";
+import { firstAccessibleHref } from "@/lib/modulos/route-slug-map";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -38,7 +40,29 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
+    // Mandar directo al primer módulo accesible (p. ej. un vendedor sin
+    // dashboard entra directo a la Caja, sin pasar por "/").
+    let destino = "/";
+    try {
+      clearModuleAccessCache();
+      const { ok, data } = await getModuleAccessCached({ forceRefresh: true });
+      if (ok) {
+        if (data.superAdmin) {
+          destino = "/";
+        } else {
+          const slugs = new Set(Array.isArray(data.slugs) ? data.slugs : []);
+          const inactiveSlugs = new Set(Array.isArray(data.inactiveSlugs) ? data.inactiveSlugs : []);
+          destino = firstAccessibleHref(slugs, {
+            superAdmin: false,
+            inactiveSlugs,
+            strict: !!data.strictAllowlist,
+          });
+        }
+      }
+    } catch {
+      destino = "/";
+    }
+    router.push(destino === "/login" ? "/" : destino);
   }
 
   return (
