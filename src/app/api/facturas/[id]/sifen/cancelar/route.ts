@@ -7,7 +7,10 @@ import {
   buildSifenCancelacionPreview,
   normalizePlazoCancelacionHoras,
 } from "@/lib/sifen/sifen-cancelacion-rules";
-import type { FacturaElectronicaDTO } from "@/lib/sifen/types";
+import type { FacturaElectronicaDTO, AmbienteSifen } from "@/lib/sifen/types";
+import { downloadSifenCertificadoObject } from "@/lib/sifen/sifen-certificados-storage";
+import { decryptSecret } from "@/lib/sifen/security";
+import { enviarEventoCancelacionSifen, normalizarMotivoEvento } from "@/lib/sifen/evento-cancelacion";
 
 function trimMotivo(raw: unknown): string | null {
   if (raw == null) return null;
@@ -17,7 +20,15 @@ function trimMotivo(raw: unknown): string | null {
 
 /**
  * POST /api/facturas/[id]/sifen/cancelar
- * Cancelación lógica del DE (estado cancelado + trazas). No elimina la factura comercial.
+ * Cancela la factura electrónica ANTE LA SET (evento siRecepEvento). Solo si la
+ * SET registra el evento (dCodRes 0600, o 4003 = el CDC ya tenía el evento) se
+ * marca cancelada en el ERP y se anula la factura comercial. Si la SET rechaza
+ * (p. ej. venció el plazo de 48 h), NO se toca nada local: el documento sigue
+ * vigente para el fisco y corresponde emitir una nota de crédito.
+ *
+ * `reintentar_set: true` reenvía el evento a la SET para facturas que quedaron
+ * marcadas canceladas localmente pero nunca se cancelaron en la SET (histórico
+ * previo a esta integración): saltea el chequeo de ventana/estado local.
  */
 export async function POST(
   request: NextRequest,
@@ -43,6 +54,7 @@ export async function POST(
       return NextResponse.json(errorResponse("Cuerpo JSON inválido"), { status: 400 });
     }
     const b = body != null && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const reintentarSet = b.reintentar_set === true;
     const motivo = trimMotivo(b.motivo);
     if (motivo == null || motivo.length < 5) {
       return NextResponse.json(
@@ -56,7 +68,7 @@ export async function POST(
 
     const { data: factura, error: errF } = await supabase
       .from("facturas")
-      .select("id, empresa_id")
+      .select("id, empresa_id, numero_factura")
       .eq("id", fid)
       .eq("empresa_id", auth.empresa_id)
       .maybeSingle();
@@ -108,13 +120,104 @@ export async function POST(
       nowMs: Date.now(),
     });
 
-    if (!preview.puede_cancelar) {
+    if (!preview.puede_cancelar && !reintentarSet) {
       return NextResponse.json(
         errorResponse(preview.motivo_bloqueo ?? "No se puede cancelar el documento electrónico."),
         { status: 409 }
       );
     }
 
+    // ── Cancelación REAL en la SET (evento siRecepEvento) ────────────────────
+    // Se envía el evento y SOLO si la SET lo registra (0600, o 4003 = ya tenía
+    // el evento) se aplica en el ERP. Si la SET rechaza, no se toca nada local.
+    const cdc = String((feRow as { cdc?: string | null }).cdc ?? "").trim();
+    if (cdc.length !== 44) {
+      return NextResponse.json(
+        errorResponse("La factura no tiene CDC válido; no hay nada que cancelar en la SET."),
+        { status: 409 }
+      );
+    }
+
+    const { data: cfgSet, error: errCfgSet } = await supabase
+      .from("empresa_sifen_config")
+      .select("ambiente, certificado_path, certificado_password_encrypted")
+      .eq("empresa_id", auth.empresa_id)
+      .maybeSingle();
+    if (errCfgSet || !cfgSet) {
+      return NextResponse.json(errorResponse("No hay configuración SIFEN para cancelar en la SET."), { status: 400 });
+    }
+    const ambiente: AmbienteSifen =
+      String((cfgSet as { ambiente?: string }).ambiente ?? "").trim().toLowerCase() === "produccion"
+        ? "produccion"
+        : "test";
+    const certPath = String((cfgSet as { certificado_path?: string | null }).certificado_path ?? "").trim();
+    const encPwd = (cfgSet as { certificado_password_encrypted?: unknown }).certificado_password_encrypted;
+    if (!certPath || encPwd == null) {
+      return NextResponse.json(
+        errorResponse("Falta el certificado .p12 o su contraseña en la configuración SIFEN."),
+        { status: 400 }
+      );
+    }
+    let p12Password: string;
+    try {
+      p12Password = decryptSecret(String(encPwd));
+    } catch (e) {
+      return NextResponse.json(
+        errorResponse(e instanceof Error ? e.message : "No se pudo descifrar la contraseña del certificado."),
+        { status: 400 }
+      );
+    }
+    const p12Dl = await downloadSifenCertificadoObject(supabase, certPath);
+    if (!p12Dl.ok) {
+      return NextResponse.json(errorResponse(`No se pudo descargar el certificado .p12: ${p12Dl.message}`), { status: 400 });
+    }
+    let motivoSet: string;
+    try {
+      motivoSet = normalizarMotivoEvento(motivo);
+    } catch (e) {
+      return NextResponse.json(errorResponse(e instanceof Error ? e.message : "Motivo inválido para la SET."), { status: 400 });
+    }
+
+    const resp = await enviarEventoCancelacionSifen({
+      ambiente,
+      cdc,
+      motivo: motivoSet,
+      certificadoP12: p12Dl.data,
+      certificadoPassword: p12Password,
+    });
+
+    if (!resp.cancelado) {
+      // La SET NO registró la cancelación: no se toca nada local. Se guarda la
+      // traza del intento para diagnóstico.
+      await supabase.from("factura_electronica_evento").insert({
+        empresa_id: auth.empresa_id,
+        factura_electronica_id: feDto.id,
+        tipo: "cancelacion",
+        detalle: {
+          origen: "api_cancelar",
+          factura_id: fid,
+          motivo,
+          resultado: "rechazado_set",
+          dCodRes: resp.dCodRes,
+          dMsgRes: resp.dMsgRes,
+          httpStatus: resp.httpStatus,
+        },
+      });
+      return NextResponse.json(
+        {
+          ...errorResponse(
+            resp.dMsgRes?.trim() ||
+              (resp.soapFault
+                ? "La SET devolvió un SOAP Fault al procesar el evento de cancelación."
+                : `La SET no registró la cancelación (HTTP ${resp.httpStatus}). Si venció el plazo de 48 h, corresponde emitir una nota de crédito.`)
+          ),
+          sifen: { dCodRes: resp.dCodRes, dMsgRes: resp.dMsgRes, httpStatus: resp.httpStatus },
+        },
+        { status: 409 }
+      );
+    }
+
+    // La SET registró el evento (0600 / 4003): recién ahora se aplica en el ERP.
     const canceladoEn = new Date().toISOString();
 
     const { data: updatedFe, error: errUp } = await supabase
@@ -147,6 +250,12 @@ export async function POST(
           factura_id: fid,
           motivo,
           cancelado_en: canceladoEn,
+          // 4003 → el CDC ya tenía el evento en la SET (reintento / doble clic):
+          // el documento está cancelado igual, pero no se registró nada nuevo.
+          resultado: resp.yaEstabaCancelado ? "ya_cancelado_set" : "registrado_set",
+          dCodRes: resp.dCodRes,
+          dMsgRes: resp.dMsgRes,
+          response_soap: resp.cuerpoSoapCrudo,
         },
       })
       .select("id")
@@ -168,6 +277,9 @@ export async function POST(
       );
     }
 
+    // La factura comercial queda anulada. Best-effort: si falla, se revierte la
+    // cancelación local del DE (aunque en la SET ya está cancelado — quedaría
+    // para conciliar con reintentar_set).
     const { error: errFactura } = await supabase
       .from("facturas")
       .update({ estado: "Anulado", saldo: 0 })
@@ -187,15 +299,19 @@ export async function POST(
       await supabase.from("factura_electronica_evento").delete().eq("id", (evInsert as { id: string }).id);
       return NextResponse.json(
         errorResponse(
-          `No se pudo anular la factura comercial (${errFactura.message}); se revirtió la cancelación del DE.`
+          `El DE se canceló en la SET pero no se pudo anular la factura comercial (${errFactura.message}). Reintentá con reintentar_set.`
         ),
         { status: 500 }
       );
     }
 
     const dto = toFacturaElectronicaDto(updatedFe as Record<string, unknown>);
-    const data: { factura_electronica: FacturaElectronicaDTO } = {
+    const data: {
+      factura_electronica: FacturaElectronicaDTO;
+      ya_estaba_cancelado_set: boolean;
+    } = {
       factura_electronica: dto,
+      ya_estaba_cancelado_set: resp.yaEstabaCancelado === true,
     };
 
     return NextResponse.json(successResponse(data));

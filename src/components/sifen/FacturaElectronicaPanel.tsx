@@ -221,12 +221,25 @@ export function FacturaElectronicaPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ motivo: m }),
       });
-      const j = (await res.json()) as { success?: boolean; error?: string };
+      const j = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+        data?: { ya_estaba_cancelado_set?: boolean };
+        sifen?: { dCodRes?: string | null; dMsgRes?: string | null; httpStatus?: number };
+      };
       if (!res.ok || !j.success) {
-        setFlash({ kind: "err", text: j.error ?? `Error ${res.status}` });
+        // La SET puede rechazar (p. ej. venció el plazo de 48 h): mostramos su
+        // mensaje y, si aplica, la sugerencia de nota de crédito.
+        const setMsg = j.sifen?.dMsgRes?.trim();
+        setFlash({ kind: "err", text: setMsg || j.error || `Error ${res.status}` });
         return;
       }
-      setFlash({ kind: "ok", text: "Documento electrónico cancelado en el ERP. La factura comercial quedó anulada." });
+      setFlash({
+        kind: "ok",
+        text: j.data?.ya_estaba_cancelado_set
+          ? "El documento ya figuraba cancelado en la SET. La factura quedó anulada en el ERP."
+          : "Documento electrónico cancelado en la SET. La factura comercial quedó anulada.",
+      });
       setCancelModal(null);
       setMotivoCancel("");
       await refresh();
@@ -716,7 +729,7 @@ export function FacturaElectronicaPanel({
                       }}
                       className="px-3 py-2 text-xs font-semibold rounded-lg bg-rose-700 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-rose-800"
                     >
-                      Cancelar factura (DE)
+                      Anular ante la SET
                     </button>
                     <button
                       type="button"
@@ -907,13 +920,15 @@ export function FacturaElectronicaPanel({
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-4 border border-slate-200">
             <h4 id="sifen-cancel-title" className="text-sm font-bold text-slate-900">
               {cancelModal === "reemitir"
-                ? "Cancelar documento y continuar en cliente"
-                : "Cancelar documento electrónico (ERP)"}
+                ? "Anular ante la SET y continuar en cliente"
+                : "Anular la factura ante la SET"}
             </h4>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Se registrará la cancelación lógica del DE, la factura comercial pasará a{" "}
-              <span className="font-semibold">Anulado</span> y quedará trazabilidad. No se elimina ningún registro.
-              {cancelModal === "reemitir" ? " Luego podés emitir una nueva factura desde la ficha del cliente." : ""}
+              Se enviará el <span className="font-semibold">evento de cancelación a la SET</span>. Solo si la SET lo
+              registra, la factura comercial pasará a <span className="font-semibold">Anulado</span> y quedará
+              trazabilidad — no se elimina ningún registro. Si venció el plazo de 48 h la SET lo rechazará y
+              corresponde emitir una nota de crédito.
+              {cancelModal === "reemitir" ? " Si se cancela, podés emitir una nueva factura desde la ficha del cliente." : ""}
             </p>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
               Motivo (obligatorio)
