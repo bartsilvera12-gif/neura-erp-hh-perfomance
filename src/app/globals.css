@@ -336,3 +336,25 @@ select:disabled {
 
 
 
+
+/* Autofill: el navegador pinta los campos autocompletados con un fondo celeste
+   (WebKit/Blink). QA pidió que los campos a rellenar queden en blanco. Forzamos
+   el fondo blanco y el color de texto normal en el estado autofill. El truco del
+   box-shadow interno es el único modo confiable de sobreescribir el fondo del
+   autofill en Chrome/Opera/Edge. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a;
+  transition: background-color 9999s ease-in-out 0s;
+}
