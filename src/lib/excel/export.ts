@@ -1,13 +1,15 @@
 /**
- * Util generico para exportar a Excel (.xlsx).
+ * Util generico para exportar a Excel (.xlsx) con estilo.
  *
  * Recibe headers (titulos legibles) y filas, construye un workbook con una
- * hoja y devuelve un Buffer listo para servir en una Response.
+ * hoja estilizada (encabezado con color de marca, bordes, filas alternadas,
+ * autofiltro y cabecera congelada) y devuelve un Buffer listo para servir.
  *
- * No depende de Campañas — usa la libreria xlsx por su cuenta. NO se debe
- * tocar src/lib/campaigns/campaign-import-service.ts.
+ * Usa `xlsx-js-style` (fork de SheetJS con soporte de estilos por celda,
+ * mismo API sincrónico). NO se debe tocar
+ * src/lib/campaigns/campaign-import-service.ts, que sigue con `xlsx` plano.
  */
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 export interface ExportColumn<T> {
   header: string;
@@ -24,15 +26,88 @@ export interface ExportOptions {
   filename?: string;
 }
 
+// ─── Paleta de marca Neura para las tablas exportadas ──────────────────────
+const BRAND = "0EA5E9"; // encabezado
+const BRAND_DARK = "0284C7"; // borde del encabezado
+const ZEBRA = "F1F9FE"; // fila par (celeste muy suave)
+const BORDER = "E2E8F0"; // borde de celdas de datos
+const HEADER_TEXT = "FFFFFF";
+const BODY_TEXT = "1E293B";
+
+type CellStyle = NonNullable<XLSX.CellObject["s"]>;
+
+function headerStyle(): CellStyle {
+  return {
+    font: { bold: true, color: { rgb: HEADER_TEXT }, sz: 11 },
+    fill: { patternType: "solid", fgColor: { rgb: BRAND } },
+    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: BRAND_DARK } },
+      bottom: { style: "medium", color: { rgb: BRAND_DARK } },
+      left: { style: "thin", color: { rgb: BRAND_DARK } },
+      right: { style: "thin", color: { rgb: BRAND_DARK } },
+    },
+  };
+}
+
+function bodyStyle(rowIdx: number, isNumber: boolean): CellStyle {
+  const zebra = rowIdx % 2 === 0; // 0-based sobre filas de datos
+  return {
+    font: { color: { rgb: BODY_TEXT }, sz: 10 },
+    fill: zebra ? { patternType: "solid", fgColor: { rgb: ZEBRA } } : { patternType: "none" },
+    alignment: { horizontal: isNumber ? "right" : "left", vertical: "center" },
+    border: {
+      top: { style: "hair", color: { rgb: BORDER } },
+      bottom: { style: "hair", color: { rgb: BORDER } },
+      left: { style: "hair", color: { rgb: BORDER } },
+      right: { style: "hair", color: { rgb: BORDER } },
+    },
+  };
+}
+
+/**
+ * Aplica estilos, autofiltro, freeze de cabecera y anchos a una hoja ya creada.
+ * `nCols`/`nRows` incluyen la fila de encabezado.
+ */
+function estilizarHoja(
+  ws: XLSX.WorkSheet,
+  nCols: number,
+  nDataRows: number,
+  colWidths?: number[]
+): void {
+  const totalRows = nDataRows + 1; // + header
+  // Estilo por celda.
+  for (let r = 0; r < totalRows; r++) {
+    for (let c = 0; c < nCols; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cell = ws[addr] as XLSX.CellObject | undefined;
+      if (!cell) {
+        // Celda vacia: la creamos para que el estilo (zebra/borde) se vea igual.
+        ws[addr] = { t: "s", v: "", s: r === 0 ? headerStyle() : bodyStyle(r - 1, false) } as XLSX.CellObject;
+        continue;
+      }
+      const isNumber = cell.t === "n";
+      cell.s = r === 0 ? headerStyle() : bodyStyle(r - 1, isNumber);
+    }
+  }
+  // Alto del encabezado.
+  ws["!rows"] = [{ hpt: 22 }];
+  // Anchos.
+  if (colWidths && colWidths.length > 0) {
+    ws["!cols"] = colWidths.map((w) => ({ wch: w }));
+  }
+  // Autofiltro sobre todo el rango (encabezados con menú de filtro/orden).
+  const ref = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: totalRows - 1, c: nCols - 1 } });
+  ws["!autofilter"] = { ref };
+}
+
 export function buildXlsxBuffer<T>(
   rows: T[],
   columns: ExportColumn<T>[],
   opts: ExportOptions = {}
 ): Buffer {
   const sheetName = (opts.sheetName ?? "Datos").slice(0, 31); // limite Excel
-  // Header row
   const headerRow = columns.map((c) => c.header);
-  // Data rows
   const dataRows = rows.map((row) =>
     columns.map((c) => {
       const v = c.value(row);
@@ -42,13 +117,15 @@ export function buildXlsxBuffer<T>(
     })
   );
   const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
-  if (columns.some((c) => c.width)) {
-    ws["!cols"] = columns.map((c) => ({ wch: c.width ?? 16 }));
-  }
+  estilizarHoja(
+    ws,
+    columns.length,
+    dataRows.length,
+    columns.map((c) => c.width ?? 16)
+  );
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
-  return buf;
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
 /** Spec de una hoja ya materializada (header + filas como matriz). */
@@ -79,14 +156,13 @@ export function sheetFromRows<T>(
   };
 }
 
-/** Construye un workbook con varias hojas y devuelve el Buffer. */
+/** Construye un workbook con varias hojas (estilizadas) y devuelve el Buffer. */
 export function buildXlsxBufferSheets(sheets: XlsxSheetSpec[]): Buffer {
   const wb = XLSX.utils.book_new();
   for (const s of sheets) {
     const ws = XLSX.utils.aoa_to_sheet(s.aoa);
-    if (s.colWidths && s.colWidths.length > 0) {
-      ws["!cols"] = s.colWidths.map((w) => ({ wch: w }));
-    }
+    const nCols = s.aoa.length > 0 ? Math.max(...s.aoa.map((r) => r.length)) : 0;
+    estilizarHoja(ws, nCols, Math.max(0, s.aoa.length - 1), s.colWidths);
     XLSX.utils.book_append_sheet(wb, ws, s.sheetName.slice(0, 31));
   }
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
