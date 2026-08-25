@@ -29,8 +29,8 @@ export interface ExportOptions {
 // ─── Paleta de marca Neura para las tablas exportadas ──────────────────────
 const BRAND = "0EA5E9"; // encabezado
 const BRAND_DARK = "0284C7"; // borde del encabezado
-const ZEBRA = "F1F9FE"; // fila par (celeste muy suave)
-const BORDER = "E2E8F0"; // borde de celdas de datos
+const ZEBRA = "E8F4FC"; // fila par (celeste suave, separa filas)
+const BORDER = "94A3B8"; // borde de celdas de datos (gris medio, grilla visible)
 const HEADER_TEXT = "FFFFFF";
 const BODY_TEXT = "1E293B";
 
@@ -57,10 +57,10 @@ function bodyStyle(rowIdx: number, isNumber: boolean): CellStyle {
     fill: zebra ? { patternType: "solid", fgColor: { rgb: ZEBRA } } : { patternType: "none" },
     alignment: { horizontal: isNumber ? "right" : "left", vertical: "center" },
     border: {
-      top: { style: "hair", color: { rgb: BORDER } },
-      bottom: { style: "hair", color: { rgb: BORDER } },
-      left: { style: "hair", color: { rgb: BORDER } },
-      right: { style: "hair", color: { rgb: BORDER } },
+      top: { style: "thin", color: { rgb: BORDER } },
+      bottom: { style: "thin", color: { rgb: BORDER } },
+      left: { style: "thin", color: { rgb: BORDER } },
+      right: { style: "thin", color: { rgb: BORDER } },
     },
   };
 }
