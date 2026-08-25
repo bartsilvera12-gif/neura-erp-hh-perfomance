@@ -85,7 +85,7 @@ export async function POST(
         items,
         permitirExcedente: body.permitir_excedente === true,
         createdBy: ctx.auth.usuarioCatalogId ?? null,
-        usuarioNombre: ctx.auth.user?.email ?? null,
+        usuarioNombre: ctx.auth.nombre?.trim() || ctx.auth.user?.email || null,
       });
       return NextResponse.json(
         successResponse({

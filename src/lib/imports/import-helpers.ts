@@ -54,7 +54,7 @@ export async function leerArchivoYAuth(request: Request): Promise<
       empresaId,
       schema,
       usuarioCatalogId: tenant.auth.usuarioCatalogId ?? null,
-      usuarioNombre: tenant.auth.user?.email ?? null,
+      usuarioNombre: tenant.auth.nombre?.trim() || tenant.auth.user?.email || null,
       filename: file.name,
       rows: parsed.rows,
       crearFaltantes,

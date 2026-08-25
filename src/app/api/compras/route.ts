@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       comprobante_nombre: body.comprobante_nombre != null && String(body.comprobante_nombre).trim() !== "" ? String(body.comprobante_nombre) : null,
       comprobante_mime_type: body.comprobante_mime_type != null && String(body.comprobante_mime_type).trim() !== "" ? String(body.comprobante_mime_type) : null,
       created_by: ctx.auth.usuarioCatalogId ?? null,
-      usuario_nombre: ctx.auth.user?.email ?? null,
+      usuario_nombre: ctx.auth.nombre?.trim() || ctx.auth.user?.email || null,
     };
 
     const items: CompraItemInput[] = [];
