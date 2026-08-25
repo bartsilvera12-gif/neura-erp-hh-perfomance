@@ -67,6 +67,8 @@ export default function FacturacionListPage() {
   const [estadoSifen, setEstadoSifen] = useState("");
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 12;
 
   useEffect(() => {
     let cancel = false;
@@ -118,6 +120,19 @@ export default function FacturacionListPage() {
     () => filtradas.reduce((acc, f) => acc + (typeof f.monto === "string" ? parseFloat(f.monto) || 0 : f.monto ?? 0), 0),
     [filtradas]
   );
+  const aprobadas = useMemo(() => filtradas.filter((f) => f.estado_sifen === "aprobado").length, [filtradas]);
+
+  // Paginado sobre el resultado filtrado.
+  const totalPages = Math.max(1, Math.ceil(filtradas.length / PAGE_SIZE));
+  const pageSafe = Math.min(page, totalPages);
+  const paginadas = useMemo(
+    () => filtradas.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE),
+    [filtradas, pageSafe]
+  );
+  // Volver a la primera página cuando cambian los filtros.
+  useEffect(() => {
+    setPage(1);
+  }, [busqueda, estadoSifen, desde, hasta]);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-10 sm:px-6 lg:px-8">
@@ -192,22 +207,27 @@ export default function FacturacionListPage() {
         )}
       </div>
 
-      {/* Resumen */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-slate-600">
-        <span>
-          <span className="font-semibold text-slate-900">{filtradas.length}</span> factura
-          {filtradas.length === 1 ? "" : "s"}
-        </span>
-        <span>
-          Total: <span className="font-semibold text-slate-900">{fmtGs(totalMonto)}</span>
-        </span>
+      {/* Resumen en tiles */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Facturas</p>
+          <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">{filtradas.length}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Monto total</p>
+          <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">{fmtGs(totalMonto)}</p>
+        </div>
+        <div className="col-span-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:col-span-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Aprobadas SET</p>
+          <p className="mt-0.5 text-xl font-bold tabular-nums text-emerald-600">{aprobadas}</p>
+        </div>
       </div>
 
       {/* Tabla */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[820px] text-sm">
-          <thead>
-            <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-500">
+          <thead className="bg-slate-50/70">
+            <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
               <th className="px-4 py-3 font-semibold">N°</th>
               <th className="px-4 py-3 font-semibold">Fecha</th>
               <th className="px-4 py-3 font-semibold">Cliente</th>
@@ -238,7 +258,7 @@ export default function FacturacionListPage() {
                 </td>
               </tr>
             ) : (
-              filtradas.map((f) => (
+              paginadas.map((f) => (
                 <tr key={f.id} className="border-b border-slate-50 hover:bg-slate-50/60">
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-800">
                     <Link href={`/facturas/${f.id}`} className="text-sky-600 hover:underline">
@@ -275,6 +295,40 @@ export default function FacturacionListPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Paginado */}
+      {!cargando && !error && filtradas.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-slate-500">
+            Mostrando{" "}
+            <span className="font-medium text-slate-700">
+              {(pageSafe - 1) * PAGE_SIZE + 1}–{Math.min(pageSafe * PAGE_SIZE, filtradas.length)}
+            </span>{" "}
+            de <span className="font-medium text-slate-700">{filtradas.length}</span>
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={pageSafe <= 1}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ← Anterior
+            </button>
+            <span className="px-2 text-xs text-slate-500">
+              Página <span className="font-semibold text-slate-800">{pageSafe}</span> de {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={pageSafe >= totalPages}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Siguiente →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
