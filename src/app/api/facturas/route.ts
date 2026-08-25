@@ -66,10 +66,66 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Estado SIFEN por factura (para el listado: badge y saber cuál se puede
+    // anular). Batch por factura_id.
+    const estadoSifenByFactura = new Map<string, { estado_sifen: string | null; cdc: string | null }>();
+    if (ids.length > 0) {
+      const { data: feRows } = await supabase
+        .from("factura_electronica")
+        .select("factura_id, estado_sifen, cdc")
+        .eq("empresa_id", auth.empresa_id)
+        .in("factura_id", ids);
+      for (const fe of (feRows ?? []) as { factura_id?: string; estado_sifen?: string | null; cdc?: string | null }[]) {
+        const fid = typeof fe.factura_id === "string" ? fe.factura_id : "";
+        if (fid) estadoSifenByFactura.set(fid, { estado_sifen: fe.estado_sifen ?? null, cdc: fe.cdc ?? null });
+      }
+    }
+
+    // Nombre/RUC para mostrar: preferimos el snapshot de la factura; si falta y
+    // hay cliente_id, resolvemos desde clientes.
+    const clienteIds = Array.from(
+      new Set(
+        facturas
+          .filter((f) => !String(f.cliente_razon_social ?? "").trim() && typeof f.cliente_id === "string")
+          .map((f) => f.cliente_id as string)
+      )
+    );
+    const clienteById = new Map<string, { nombre: string | null; ruc: string | null }>();
+    if (clienteIds.length > 0) {
+      const { data: cliRows } = await supabase
+        .from("clientes")
+        .select("id, empresa, nombre_contacto, nombre, ruc, documento")
+        .eq("empresa_id", auth.empresa_id)
+        .in("id", clienteIds);
+      for (const c of (cliRows ?? []) as Record<string, string | null>[]) {
+        const cid = typeof c.id === "string" ? c.id : "";
+        if (!cid) continue;
+        const t = (v: string | null | undefined) => (typeof v === "string" && v.trim() ? v.trim() : null);
+        clienteById.set(cid, {
+          nombre: t(c.empresa) || t(c.nombre_contacto) || t(c.nombre),
+          ruc: t(c.ruc) || t(c.documento),
+        });
+      }
+    }
+
     const enriched = facturas.map((row) => {
       const rid = typeof row.id === "string" ? row.id : "";
       const fp = rid ? lastPagoByFactura.get(rid) ?? null : null;
-      return { ...row, fecha_pago_registro: fp };
+      const cid = typeof row.cliente_id === "string" ? row.cliente_id : "";
+      const snapNombre = String(row.cliente_razon_social ?? "").trim();
+      const snapRuc = String(row.cliente_ruc ?? "").trim();
+      const cli = cid ? clienteById.get(cid) : undefined;
+      const cliente_display = snapNombre || cli?.nombre || "—";
+      const ruc_display = snapRuc || cli?.ruc || null;
+      const fe = rid ? estadoSifenByFactura.get(rid) : undefined;
+      return {
+        ...row,
+        fecha_pago_registro: fp,
+        cliente_display,
+        ruc_display,
+        estado_sifen: fe?.estado_sifen ?? null,
+        cdc: fe?.cdc ?? null,
+      };
     });
 
     return NextResponse.json(successResponse(enriched));
