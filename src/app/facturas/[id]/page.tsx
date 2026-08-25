@@ -68,6 +68,7 @@ function FacturaDetalleInner() {
   const [notFound, setNotFound] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [resumen, setResumen] = useState<SifenResumen | null>(null);
+  const [avisoImpresion, setAvisoImpresion] = useState<string | null>(null);
   const [loadingF, setLoadingF] = useState(true);
   const [loadingS, setLoadingS] = useState(true);
 
@@ -147,14 +148,28 @@ function FacturaDetalleInner() {
   const kudeDisponible = estadoDe === "aprobado" || estadoDe === "cancelado";
 
   const imprimir = useCallback(() => {
+    setAvisoImpresion(null);
     if (kudeDisponible && id) {
       // Ruta RELATIVA: detrás del proxy, request.url es interno; el navegador
       // resuelve la relativa contra el dominio público.
       window.open(`/api/facturas/${id}/sifen/kude`, "_blank", "noopener");
-    } else {
-      window.print();
+      return;
     }
-  }, [kudeDisponible, id]);
+    // Sin KuDE: no imprimimos la página web (no es un documento válido). Se
+    // explica por qué según el estado del DE.
+    const e = estadoDe;
+    if (e === "rechazado") {
+      setAvisoImpresion(
+        "La SET rechazó este documento, así que no tiene factura legal (KuDE). Corregí el motivo del rechazo y reemití con «Regenerar documento»; el KuDE queda disponible cuando la SET lo apruebe."
+      );
+    } else if (e === "borrador" || e === "generado" || e === "firmado" || e === "enviado") {
+      setAvisoImpresion(
+        "La factura todavía se está emitiendo en la SET. El KuDE legal (PDF con CDC y QR) queda disponible para imprimir cuando la SET la apruebe."
+      );
+    } else {
+      setAvisoImpresion("Esta factura aún no tiene documento electrónico para imprimir.");
+    }
+  }, [kudeDisponible, id, estadoDe]);
 
   useEffect(() => {
     if (searchParams?.get("print") === "1" && factura && !loadingF && !loadingS) {
@@ -237,6 +252,15 @@ function FacturaDetalleInner() {
           </button>
         </div>
       </div>
+
+      {avisoImpresion && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 print:hidden">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0" aria-hidden>
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <p className="leading-relaxed">{avisoImpresion}</p>
+        </div>
+      )}
 
       {/* Resumen comercial */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
