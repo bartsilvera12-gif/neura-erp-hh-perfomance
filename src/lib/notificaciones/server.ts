@@ -2,7 +2,11 @@
  * Notificaciones (campanita). PG directo, schema ferreteriarepublica.
  *
  * Uso actual: aviso urgente de stock bajo para productos CLASE A (alta rotación).
- * Condición: stock_actual <= stock_minimo + STOCK_ALERTA_OFFSET.
+ * Condición: stock_actual <= stock_minimo — MISMO criterio que el dashboard
+ * («Bajo stock mínimo»), restringido a los productos clase A para no saturar la
+ * campanita. Antes usaba stock_minimo + 10, lo que disparaba avisos para
+ * productos con mínimo 0 y stock positivo, contradiciendo el «todo en orden»
+ * del dashboard.
  * Dedupe: índice único parcial (empresa, producto, tipo) WHERE leida=false, más
  * INSERT ... ON CONFLICT DO NOTHING. Si el usuario la lee y el stock sigue bajo,
  * una próxima evaluación puede volver a generarla (criterio seguro).
@@ -12,8 +16,6 @@ import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
 import { getRotacionAbc } from "@/lib/reportes/server/rotacion-abc-pg";
 import { asuncionRangeBoundsUtc } from "@/lib/fechas/asuncion-bounds";
 
-/** Offset sobre el stock mínimo para disparar el aviso de clase A. */
-export const STOCK_ALERTA_OFFSET = 10;
 const TIPO_STOCK_A = "stock_bajo_a";
 const TZ = "America/Asuncion";
 
@@ -105,7 +107,7 @@ export async function evaluarStockClaseA(schemaRaw: string, empresaId: string): 
   });
 
   const candidatos = abc.productos.filter(
-    (p) => p.rango === "A" && p.stock_actual <= p.stock_minimo + STOCK_ALERTA_OFFSET
+    (p) => p.rango === "A" && p.stock_actual <= p.stock_minimo
   );
   if (candidatos.length === 0) return 0;
 
