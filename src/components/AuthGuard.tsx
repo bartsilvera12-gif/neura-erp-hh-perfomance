@@ -134,6 +134,19 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
       !access.superAdmin &&
       !isModuleSlugGranted(slug, access.slugs, access.inactiveSlugs, { strict: access.strict })
     ) {
+      // Si el usuario tiene algún otro módulo accesible (p. ej. un vendedor con
+      // solo Caja que aterriza en "/"/dashboard), mandarlo directo ahí en vez de
+      // mostrar la pantalla de "módulo no habilitado".
+      const fallback = firstAccessibleHref(access.slugs, {
+        superAdmin: access.superAdmin,
+        inactiveSlugs: access.inactiveSlugs,
+        strict: access.strict,
+      });
+      if (fallback && fallback !== "/login" && fallback !== pathname) {
+        router.replace(fallback);
+        setBlockedSlug(null);
+        return;
+      }
       setBlockedSlug(slug);
       return;
     }
