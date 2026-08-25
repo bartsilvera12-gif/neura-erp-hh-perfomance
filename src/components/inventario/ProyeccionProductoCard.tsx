@@ -77,11 +77,11 @@ export default function ProyeccionProductoCard({ productoId }: { productoId: str
             </div>
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Prom./día</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums text-slate-900">{data.promedio_diario > 0 ? fmt(data.promedio_diario, 2) : "—"}</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-slate-900">{data.promedio_diario > 0 ? fmt(Math.round(data.promedio_diario)) : "—"}</p>
             </div>
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Días de cobertura</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums text-[#3F8E91]">{data.dias_cobertura == null ? "—" : fmt(data.dias_cobertura, 1)}</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-[#3F8E91]">{data.dias_cobertura == null ? "—" : fmt(Math.round(data.dias_cobertura))}</p>
             </div>
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Quiebre est.</p>

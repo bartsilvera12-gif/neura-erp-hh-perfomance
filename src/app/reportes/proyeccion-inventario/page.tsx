@@ -181,8 +181,8 @@ export default function ProyeccionInventarioPage() {
                       <td className={`px-3 py-2.5 text-right text-xs tabular-nums font-medium ${p.stock_actual <= p.stock_minimo ? "text-red-600" : "text-slate-700"}`}>{fmtNum(p.stock_actual)}</td>
                       <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-500">{fmtNum(p.stock_minimo)}</td>
                       <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-700">{fmtNum(p.cantidad_vendida)}</td>
-                      <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-600">{p.promedio_diario > 0 ? fmtNum(p.promedio_diario, 2) : "—"}</td>
-                      <td className="px-3 py-2.5 text-right text-xs tabular-nums font-bold text-slate-900">{p.dias_cobertura == null ? "—" : fmtNum(p.dias_cobertura, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-600">{p.promedio_diario > 0 ? fmtNum(Math.round(p.promedio_diario)) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-xs tabular-nums font-bold text-slate-900">{p.dias_cobertura == null ? "—" : fmtNum(Math.round(p.dias_cobertura))}</td>
                       <td className="px-3 py-2.5 text-right text-xs tabular-nums text-slate-600">{p.estado === "sin_movimiento" || p.estado === "sin_stock" ? "—" : fechaQuiebre(p.dias_cobertura)}</td>
                       <td className="px-3 py-2.5 text-center">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${ESTADO_BADGE[p.estado]}`}>
