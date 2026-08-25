@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { RotateCcw, Printer, FileText, Truck, ScrollText } from "lucide-react";
+import { RotateCcw, Printer, FileText, Truck, ScrollText, X, Calendar, User, Tag, Wallet, type LucideIcon } from "lucide-react";
 import EdgeScrollArea from "@/components/ui/EdgeScrollArea";
 import { FancySelect } from "@/components/ui/FancySelect";
 import MobileFab from "@/components/ui/MobileFab";
@@ -419,73 +419,72 @@ export default function VentasPage() {
 
 function VentaDetalleModal({ venta, onClose }: { venta: Venta; onClose: () => void }) {
   const cantTotal = venta.items.reduce((s, i) => s + i.cantidad, 0);
+  const pagoLabel =
+    venta.metodo_pago === "tarjeta" ? "Tarjeta"
+    : venta.metodo_pago === "transferencia" ? "Transferencia"
+    : venta.metodo_pago === "efectivo" ? "Efectivo"
+    : "—";
+  const tipoLabel = venta.tipo_venta === "CONTADO" ? "Contado" : `Crédito ${venta.plazo_dias ?? ""}d`;
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl overflow-hidden rounded-2xl border-2 border-[#4FAEB2]/20 bg-white shadow-2xl"
+        className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/5"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-[#4FAEB2]/5 to-transparent px-5 py-4">
-          <div>
-            <h3 className="font-mono text-sm font-bold text-[#3F8E91]">{venta.numero_control}</h3>
-            <p className="mt-0.5 text-xs text-slate-500">Detalle de la venta</p>
+        <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-6 py-4 text-white">
+          <div className="min-w-0">
+            <h3 className="font-mono text-base font-bold tracking-tight">{venta.numero_control}</h3>
+            <p className="text-xs font-medium text-white/70">Detalle de la venta</p>
           </div>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/15 hover:text-white"
             aria-label="Cerrar"
           >
-            ✕
+            <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Meta: fecha/hora, vendedor, tipo, pago */}
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 sm:grid-cols-4">
-          <Meta label="Fecha y hora" value={formatFecha(venta.fecha)} />
-          <Meta label="Vendedor" value={venta.usuario_nombre ?? "—"} />
-          <Meta
-            label="Tipo"
-            value={venta.tipo_venta === "CONTADO" ? "Contado" : `Crédito ${venta.plazo_dias ?? ""}d`}
-          />
-          <Meta
-            label="Pago"
-            value={
-              venta.metodo_pago === "tarjeta" ? "Tarjeta"
-              : venta.metodo_pago === "transferencia" ? "Transferencia"
-              : venta.metodo_pago === "efectivo" ? "Efectivo"
-              : "—"
-            }
-          />
+        <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 border-b border-slate-100 sm:grid-cols-4 sm:divide-y-0">
+          <Meta icon={Calendar} label="Fecha y hora" value={formatFecha(venta.fecha)} />
+          <Meta icon={User} label="Vendedor" value={venta.usuario_nombre ?? "—"} />
+          <Meta icon={Tag} label="Tipo" value={tipoLabel} />
+          <Meta icon={Wallet} label="Pago" value={pagoLabel} />
         </div>
 
         {/* Ítems */}
-        <div className="max-h-[50vh] overflow-y-auto px-5 pb-2">
+        <div className="max-h-[46vh] overflow-y-auto px-6 pt-5">
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full min-w-[520px] text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold">Producto</th>
-                  <th className="px-3 py-2 text-center font-semibold">Cant.</th>
-                  <th className="px-3 py-2 text-right font-semibold">P. Unit.</th>
-                  <th className="px-3 py-2 text-center font-semibold">IVA</th>
-                  <th className="px-3 py-2 text-right font-semibold">Total</th>
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                <tr className="border-b border-slate-200">
+                  <th className="px-4 py-2.5 text-left font-semibold">Producto</th>
+                  <th className="px-3 py-2.5 text-center font-semibold">Cant.</th>
+                  <th className="px-3 py-2.5 text-right font-semibold">P. Unit.</th>
+                  <th className="px-3 py-2.5 text-center font-semibold">IVA</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {venta.items.map((it, idx) => (
-                  <tr key={`${it.producto_id}-${idx}`}>
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-slate-800">{it.producto_nombre}</div>
-                      <div className="font-mono text-xs text-slate-400">{it.sku}</div>
+                  <tr key={`${it.producto_id}-${idx}`} className="transition-colors hover:bg-slate-50/60">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-800">{it.producto_nombre}</div>
+                      {it.sku && <div className="font-mono text-[11px] text-slate-400">{it.sku}</div>}
                     </td>
-                    <td className="px-3 py-2 text-center tabular-nums text-slate-700">{it.cantidad}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{formatGs(it.precio_venta)}</td>
-                    <td className="px-3 py-2 text-center text-xs text-slate-500">{ivaLabel[it.tipo_iva]}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-800">{formatGs(it.total_linea)}</td>
+                    <td className="px-3 py-3 text-center tabular-nums text-slate-700">{it.cantidad}</td>
+                    <td className="px-3 py-3 text-right tabular-nums text-slate-600">{formatGs(it.precio_venta)}</td>
+                    <td className="px-3 py-3 text-center">
+                      <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                        {ivaLabel[it.tipo_iva]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-900">{formatGs(it.total_linea)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -494,13 +493,13 @@ function VentaDetalleModal({ venta, onClose }: { venta: Venta; onClose: () => vo
         </div>
 
         {/* Totales */}
-        <div className="border-t border-slate-100 px-5 py-4">
-          <div className="ml-auto max-w-xs space-y-1 text-sm">
-            <Fila label={`Subtotal (${venta.items.length} ítem(s), ${cantTotal} u.)`} value={formatGs(venta.subtotal)} />
+        <div className="px-6 py-5">
+          <div className="ml-auto max-w-xs space-y-1.5">
+            <Fila label={`Subtotal · ${venta.items.length} ítem(s), ${cantTotal} u.`} value={formatGs(venta.subtotal)} />
             <Fila label="IVA" value={formatGs(venta.monto_iva)} />
-            <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-900">
-              <span>Total</span>
-              <span className="tabular-nums">{formatGs(venta.total)}</span>
+            <div className="mt-2 flex items-center justify-between rounded-xl bg-[#E5F4F4] px-4 py-2.5">
+              <span className="text-sm font-bold text-[#3F8E91]">Total</span>
+              <span className="text-lg font-bold tabular-nums text-[#3F8E91]">{formatGs(venta.total)}</span>
             </div>
           </div>
         </div>
@@ -509,20 +508,22 @@ function VentaDetalleModal({ venta, onClose }: { venta: Venta; onClose: () => vo
   );
 }
 
-function Meta({ label, value }: { label: string; value: string }) {
+function Meta({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <div>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="mt-0.5 text-sm font-medium text-slate-800">{value}</p>
+    <div className="px-4 py-3.5">
+      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        <Icon className="h-3 w-3" /> {label}
+      </p>
+      <p className="mt-1 truncate text-sm font-semibold text-slate-800" title={value}>{value}</p>
     </div>
   );
 }
 
 function Fila({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between text-slate-600">
+    <div className="flex items-center justify-between text-sm text-slate-500">
       <span>{label}</span>
-      <span className="tabular-nums">{value}</span>
+      <span className="tabular-nums text-slate-700">{value}</span>
     </div>
   );
 }
