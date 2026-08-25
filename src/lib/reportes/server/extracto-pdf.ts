@@ -30,9 +30,24 @@ function fecha(iso: string | null): string {
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
 }
+/**
+ * Sanea a caracteres que la fuente estándar (WinAnsi) sí puede codificar.
+ * Sin esto, un carácter fuera de Latin-1 (emoji, ₲, comillas tipográficas…)
+ * hace que pdf-lib lance excepción y el PDF falle con error 500.
+ */
+function wa(t: unknown): string {
+  return String(t ?? "")
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/[“”„‟]/g, '"')
+    .replace(/[–—―]/g, "-")
+    .replace(/₲/g, "Gs")
+    .replace(/ /g, " ")
+    .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "");
+}
+
 /** Recorta el texto para que entre en `max` puntos. */
 function fit(t: string, f: PDFFont, size: number, max: number): string {
-  let s = String(t ?? "");
+  let s = wa(t);
   if (f.widthOfTextAtSize(s, size) <= max) return s;
   while (s.length > 1 && f.widthOfTextAtSize(s + "…", size) > max) s = s.slice(0, -1);
   return s + "…";
@@ -68,19 +83,25 @@ function espacio(c: Ctx, alto: number) {
 
 function encabezado(c: Ctx, primera: boolean) {
   const { page, bold, reg } = c;
+  // Logo: se escala respetando su proporción real dentro de una caja
+  // (máx. 96×44) para que no se deforme ni invada el contenido de abajo.
+  let textX = MX;
   if (c.logo) {
-    const w = 92;
-    const h = (c.logo.height / c.logo.width) * w;
-    page.drawImage(c.logo, { x: MX, y: c.y - h + 6, width: w, height: Math.min(h, 44) });
+    const maxW = 96, maxH = 44;
+    const scale = Math.min(maxW / c.logo.width, maxH / c.logo.height);
+    const w = c.logo.width * scale;
+    const h = c.logo.height * scale;
+    page.drawImage(c.logo, { x: MX, y: c.y - h, width: w, height: h });
+    textX = MX + w + 12;
   }
-  page.drawText(c.empresa.nombre, { x: MX + (c.logo ? 104 : 0), y: c.y - 10, size: 13, font: bold, color: NEGRO });
+  page.drawText(wa(c.empresa.nombre), { x: textX, y: c.y - 10, size: 13, font: bold, color: NEGRO });
   let sy = c.y - 24;
   if (c.empresa.telefono) {
-    page.drawText(`Tel: ${c.empresa.telefono}`, { x: MX + (c.logo ? 104 : 0), y: sy, size: 8, font: reg, color: GRIS });
+    page.drawText(`Tel: ${c.empresa.telefono}`, { x: textX, y: sy, size: 8, font: reg, color: GRIS });
     sy -= 11;
   }
   if (c.empresa.direccion) {
-    page.drawText(fit(c.empresa.direccion, reg, 8, 260), { x: MX + (c.logo ? 104 : 0), y: sy, size: 8, font: reg, color: GRIS });
+    page.drawText(fit(c.empresa.direccion, reg, 8, 260), { x: textX, y: sy, size: 8, font: reg, color: GRIS });
   }
 
   const titulo = "EXTRACTO DE CRÉDITO";
