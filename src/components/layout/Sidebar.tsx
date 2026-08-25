@@ -164,19 +164,20 @@ const MENU_STRUCTURE: MenuItem[] = [
   // },
   // Usuarios oculto del sidebar (codigo conservado, ruta accesible por URL).
   // { key: "usuarios", slug: "usuarios", label: "Usuarios", href: "/usuarios", icon: UserCog },
-  // Configuracion: reactivado a pedido. Da acceso al panel de facturacion
-  // (modo / autoimpresor) y demas subpaginas de configuracion.
-  {
-    key: "configuracion",
-    slug: "configuracion",
-    label: "Configuración",
-    href: "/configuracion",
-    icon: Settings,
-    children: [
-      { label: "Facturación", href: "/configuracion/facturacion" },
-      { label: "Equipos y supervisión", href: "/configuracion/omnicanal-equipos" },
-    ],
-  },
+  // Configuracion oculto del sidebar a pedido. Codigo conservado; las rutas
+  // siguen accesibles por URL (/configuracion, /configuracion/facturacion,
+  // /configuracion/facturacion-electronica, etc.).
+  // {
+  //   key: "configuracion",
+  //   slug: "configuracion",
+  //   label: "Configuración",
+  //   href: "/configuracion",
+  //   icon: Settings,
+  //   children: [
+  //     { label: "Facturación", href: "/configuracion/facturacion" },
+  //     { label: "Equipos y supervisión", href: "/configuracion/omnicanal-equipos" },
+  //   ],
+  // },
   // "Ofertas del home" se elimino junto con el sitio web publico: configuraba
   // el banner "Ofertas de la semana" de esa web. Sin sitio no tiene destino.
   // Items ocultos en ferreteria (no aplican / duplicados):
