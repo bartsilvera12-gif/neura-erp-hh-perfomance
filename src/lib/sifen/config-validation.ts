@@ -267,6 +267,8 @@ export function validateCreateBody(raw: unknown): EmpresaSifenConfigCreateResult
     distrito_descripcion: ubi.distrito_descripcion,
     ciudad_codigo: ubi.ciudad_codigo,
     ciudad_descripcion: ubi.ciudad_descripcion,
+    emisor_telefono: optionalNullableString(b.emisor_telefono),
+    emisor_email: optionalNullableString(b.emisor_email),
     ambiente,
     csc: optionalNullableString(b.csc),
     certificado_path: optionalNullableString(b.certificado_path),
@@ -391,6 +393,12 @@ export function buildPatchUpdate(raw: unknown): EmpresaSifenConfigPatchResult {
     patch.ciudad_codigo = ubi.ciudad_codigo;
     patch.ciudad_descripcion = ubi.ciudad_descripcion;
   }
+  if ("emisor_telefono" in b) {
+    patch.emisor_telefono = b.emisor_telefono === null ? null : trimStr(b.emisor_telefono) || null;
+  }
+  if ("emisor_email" in b) {
+    patch.emisor_email = b.emisor_email === null ? null : trimStr(b.emisor_email) || null;
+  }
   if ("ambiente" in b) {
     const a = parseAmbiente(b.ambiente);
     if (!a) return { ok: false, error: "ambiente debe ser 'test' o 'produccion'" };
@@ -473,6 +481,8 @@ export function rowFromCreateBody(empresaId: string, body: EmpresaSifenConfigCre
     distrito_descripcion: body.distrito_descripcion ?? null,
     ciudad_codigo: body.ciudad_codigo,
     ciudad_descripcion: body.ciudad_descripcion,
+    emisor_telefono: body.emisor_telefono ?? null,
+    emisor_email: body.emisor_email ?? null,
     csc: body.csc ?? null,
     certificado_path: body.certificado_path ?? null,
     activo: body.activo ?? true,

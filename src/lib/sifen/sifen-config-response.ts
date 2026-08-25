@@ -48,6 +48,8 @@ export function toEmpresaSifenConfigPublicDto(
         : String(row.actividad_economica_descripcion).trim(),
     establecimiento: String(row.establecimiento ?? ""),
     punto_expedicion: String(row.punto_expedicion ?? ""),
+    emisor_telefono: nullableTrimmed(row.emisor_telefono),
+    emisor_email: nullableTrimmed(row.emisor_email),
     departamento_codigo: nullableTrimmed(row.departamento_codigo),
     departamento_descripcion: nullableTrimmed(row.departamento_descripcion),
     distrito_codigo: nullableTrimmed(row.distrito_codigo),

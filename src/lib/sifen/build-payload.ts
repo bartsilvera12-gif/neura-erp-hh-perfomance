@@ -91,6 +91,8 @@ export interface SifenBuildConfigRow {
   actividad_economica_descripcion?: string | null;
   establecimiento: string;
   punto_expedicion: string;
+  emisor_telefono?: string | null;
+  emisor_email?: string | null;
   departamento_codigo?: string | null;
   departamento_descripcion?: string | null;
   distrito_codigo?: string | null;
@@ -217,6 +219,8 @@ function validateEmisor(config: SifenBuildConfigRow | null): { ok: true; emisor:
       distrito_descripcion: ubi.distrito_descripcion,
       ciudad_codigo: ubi.ciudad_codigo,
       ciudad_descripcion: ubi.ciudad_descripcion,
+      telefono: trimStr(config.emisor_telefono) || null,
+      email: trimStr(config.emisor_email) || null,
       csc: cscRaw === "" ? null : cscRaw,
     },
   };

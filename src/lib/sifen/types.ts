@@ -25,6 +25,10 @@ export interface EmpresaSifenConfigDTO {
   actividad_economica_descripcion: string | null;
   establecimiento: string;
   punto_expedicion: string;
+  /** gEmis.dTelEmi — teléfono del emisor. */
+  emisor_telefono: string | null;
+  /** gEmis.dEmailE — email del emisor. */
+  emisor_email: string | null;
   /** gEmis.cDepEmi / dDesDepEmi — tabla geográfica DNIT. */
   departamento_codigo: string | null;
   departamento_descripcion: string | null;
@@ -76,6 +80,8 @@ export interface EmpresaSifenConfigCreateBody {
   distrito_descripcion?: string | null;
   ciudad_codigo: string;
   ciudad_descripcion: string;
+  emisor_telefono?: string | null;
+  emisor_email?: string | null;
   ambiente: AmbienteSifen;
   csc?: string | null;
   certificado_path?: string | null;
@@ -105,6 +111,8 @@ export interface EmpresaSifenConfigPatchBody {
   distrito_descripcion?: string | null;
   ciudad_codigo?: string;
   ciudad_descripcion?: string;
+  emisor_telefono?: string | null;
+  emisor_email?: string | null;
   ambiente?: AmbienteSifen;
   csc?: string | null;
   certificado_path?: string | null;
@@ -246,6 +254,10 @@ export interface SifenPayloadEmisor {
   distrito_descripcion: string | null;
   ciudad_codigo: string;
   ciudad_descripcion: string;
+  /** gEmis.dTelEmi — teléfono del emisor (desde empresa_sifen_config). */
+  telefono: string | null;
+  /** gEmis.dEmailE — email del emisor (desde empresa_sifen_config). */
+  email: string | null;
   /** Código de seguridad del timbrado (SET); obligatorio para generar el DE oficial. */
   csc: string | null;
 }

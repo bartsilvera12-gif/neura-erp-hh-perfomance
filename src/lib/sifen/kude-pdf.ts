@@ -334,8 +334,8 @@ export async function buildKudePdfBuffer(input: BuildKudePdfInput): Promise<Buff
   const leftChunks: { lines: string[]; size: number; bold: boolean; col: RGB }[] = [
     { lines: wrapByChars(parsed.emisor.dNomEmi, leftMaxChars), size: 9, bold: true, col: BLACK },
     { lines: wrapByChars(parsed.emisor.dDirEmi, leftMaxChars), size: 7.5, bold: false, col: BLACK },
-    { lines: [`Tel.: ${NEURA_KUDE_TEL}`], size: 7.5, bold: false, col: BLACK },
-    { lines: [`Email: ${NEURA_KUDE_EMAIL}`], size: 7.5, bold: false, col: BLACK },
+    { lines: [`Tel.: ${parsed.emisor.dTelEmi?.trim() || NEURA_KUDE_TEL}`], size: 7.5, bold: false, col: BLACK },
+    { lines: [`Email: ${parsed.emisor.dEmailE?.trim() || NEURA_KUDE_EMAIL}`], size: 7.5, bold: false, col: BLACK },
   ];
 
   const rightLines = 6;

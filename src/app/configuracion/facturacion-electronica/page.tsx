@@ -79,6 +79,8 @@ export default function FacturacionElectronicaSifenPage() {
   const [establecimiento, setEstablecimiento] = useState("");
   const [puntoExpedicion, setPuntoExpedicion] = useState("");
   const [csc, setCsc] = useState("");
+  const [emisorTelefono, setEmisorTelefono] = useState("");
+  const [emisorEmail, setEmisorEmail] = useState("");
   const [depCodigo, setDepCodigo] = useState("");
   const [depDescripcion, setDepDescripcion] = useState("");
   const [disCodigo, setDisCodigo] = useState("");
@@ -139,6 +141,8 @@ export default function FacturacionElectronicaSifenPage() {
         setEstablecimiento(d.establecimiento);
         setPuntoExpedicion(d.punto_expedicion);
         setCsc(d.csc ?? "");
+        setEmisorTelefono(d.emisor_telefono ?? "");
+        setEmisorEmail(d.emisor_email ?? "");
         setDepCodigo(d.departamento_codigo ?? "");
         setDepDescripcion(d.departamento_descripcion ?? "");
         setDisCodigo(d.distrito_codigo ?? "");
@@ -253,6 +257,8 @@ export default function FacturacionElectronicaSifenPage() {
           ruc: ruc.trim(),
           razon_social: razonSocial.trim(),
           direccion_fiscal: direccionFiscal.trim() || null,
+          emisor_telefono: emisorTelefono.trim() || null,
+          emisor_email: emisorEmail.trim() || null,
           timbrado_numero: timbradoNumero.trim(),
           timbrado_fecha_inicio_vigencia: timbradoFechaIni.trim(),
           actividad_economica_codigo: actEcoCodigo.trim(),
@@ -292,6 +298,8 @@ export default function FacturacionElectronicaSifenPage() {
           ruc: ruc.trim(),
           razon_social: razonSocial.trim(),
           direccion_fiscal: direccionFiscal.trim() || null,
+          emisor_telefono: emisorTelefono.trim() || null,
+          emisor_email: emisorEmail.trim() || null,
           timbrado_numero: timbradoNumero.trim(),
           timbrado_fecha_inicio_vigencia: timbradoFechaIni.trim(),
           actividad_economica_codigo: actEcoCodigo.trim(),
@@ -712,6 +720,33 @@ export default function FacturacionElectronicaSifenPage() {
               </p>
             </div>
             <div>
+              <label className={fLabel}>Teléfono del emisor</label>
+              <input
+                className={fInput}
+                value={emisorTelefono}
+                onChange={(e) => setEmisorTelefono(e.target.value)}
+                placeholder="Ej: 0971611906"
+                inputMode="tel"
+              />
+              <p className="text-xs text-slate-500 mt-1.5">
+                Va al XML como <span className="font-mono">dTelEmi</span> y al pie del KuDE (8-15 dígitos).
+              </p>
+            </div>
+            <div>
+              <label className={fLabel}>Email del emisor</label>
+              <input
+                className={fInput}
+                type="email"
+                value={emisorEmail}
+                onChange={(e) => setEmisorEmail(e.target.value)}
+                placeholder="Ej: info@empresa.com.py"
+                autoComplete="off"
+              />
+              <p className="text-xs text-slate-500 mt-1.5">
+                Va al XML como <span className="font-mono">dEmailE</span> y al pie del KuDE.
+              </p>
+            </div>
+            <div>
               <label className={fLabel}>Timbrado (número)</label>
               <input className={fInput} value={timbradoNumero} onChange={(e) => setTimbradoNumero(e.target.value)} required />
             </div>
@@ -1095,6 +1130,8 @@ export default function FacturacionElectronicaSifenPage() {
                   setCiuDescripcion(cfg.ciudad_descripcion ?? "");
                   setPuntoExpedicion(cfg.punto_expedicion);
                   setCsc(cfg.csc ?? "");
+                  setEmisorTelefono(cfg.emisor_telefono ?? "");
+                  setEmisorEmail(cfg.emisor_email ?? "");
                   setActivo(cfg.activo);
                   setCertVenc(isoToDateInput(cfg.certificado_vencimiento));
                 }
