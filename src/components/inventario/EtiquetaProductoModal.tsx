@@ -35,13 +35,13 @@ interface Config {
   mostrarNombre: boolean;
 }
 
-const CONFIG_KEY = "hh-etiqueta-config-v2";
+const CONFIG_KEY = "hh-etiqueta-config-v3";
 const DEFAULT_CONFIG: Config = {
-  anchoMm: 35,
+  anchoMm: 34,
   altoMm: 22,
   columnas: 3,
-  gapXmm: 2,
-  gapYmm: 2,
+  gapXmm: 3,
+  gapYmm: 3,
   margenSupMm: 8,
   margenIzqMm: 6,
   cantidad: 30,
