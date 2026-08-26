@@ -27,18 +27,24 @@ interface Config {
   altoMm: number;
   columnas: number;
   gapXmm: number;
+  gapYmm: number;
+  margenSupMm: number;
+  margenIzqMm: number;
   cantidad: number;
   mostrarPrecio: boolean;
   mostrarNombre: boolean;
 }
 
-const CONFIG_KEY = "hh-etiqueta-config-v1";
+const CONFIG_KEY = "hh-etiqueta-config-v2";
 const DEFAULT_CONFIG: Config = {
   anchoMm: 35,
   altoMm: 22,
   columnas: 3,
   gapXmm: 2,
-  cantidad: 1,
+  gapYmm: 2,
+  margenSupMm: 8,
+  margenIzqMm: 6,
+  cantidad: 30,
   mostrarPrecio: true,
   mostrarNombre: true,
 };
@@ -126,17 +132,24 @@ function escapeHtml(s: string): string {
 
 /** CSS compartido por preview e impresión, parametrizado por el tamaño. */
 function etiquetaCss(cfg: Config): string {
-  const rowW = cfg.columnas * cfg.anchoMm + (cfg.columnas - 1) * cfg.gapXmm;
+  // Ancho de la grilla = margen izq + N columnas + separaciones, para que
+  // entren exactamente `columnas` etiquetas por fila y el resto baje.
+  const sheetW = cfg.margenIzqMm + cfg.columnas * cfg.anchoMm + (cfg.columnas - 1) * cfg.gapXmm;
   return `
-    .et-row { display: flex; height: ${cfg.altoMm}mm; page-break-inside: avoid; }
+    .et-sheet {
+      box-sizing: border-box; width: ${sheetW}mm;
+      padding: ${cfg.margenSupMm}mm 0 0 ${cfg.margenIzqMm}mm;
+      display: flex; flex-wrap: wrap; align-content: flex-start;
+      column-gap: ${cfg.gapXmm}mm; row-gap: ${cfg.gapYmm}mm;
+    }
     .et-label {
       width: ${cfg.anchoMm}mm; height: ${cfg.altoMm}mm; flex: 0 0 ${cfg.anchoMm}mm; min-width: 0;
+      page-break-inside: avoid; break-inside: avoid;
       box-sizing: border-box; padding: 0.6mm 1mm;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       overflow: hidden; background: #fff; color: #000;
       font-family: Arial, Helvetica, sans-serif; text-align: center; gap: 0.3mm;
     }
-    .et-label + .et-label { margin-left: ${cfg.gapXmm}mm; }
     .et-nombre {
       flex: 0 0 auto;
       font-weight: 700; line-height: 1.05; width: 100%; max-width: 100%;
@@ -146,9 +159,7 @@ function etiquetaCss(cfg: Config): string {
     }
     .et-barcode { width: 100%; flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
     .et-barcode svg { width: 100%; height: 100%; display: block; }
-    .et-codigo { font-size: 1.9mm; letter-spacing: 0.3px; line-height: 1; width: 100%; }
     .et-precio { flex: 0 0 auto; font-weight: 800; font-size: ${Math.max(2.4, Math.min(3.6, cfg.altoMm / 6.5)).toFixed(2)}mm; line-height: 1; }
-    .et-page-width { width: ${rowW}mm; }
   `;
 }
 
@@ -186,7 +197,7 @@ export default function EtiquetaProductoModal({
     if (!previewRef.current) return;
     previewRef.current.innerHTML = `
       <style>${etiquetaCss(cfg)}</style>
-      <div class="et-row">${etiquetaHtml(cfg, nombre, barcodeSvg, precio)}</div>`;
+      <div style="display:inline-block">${etiquetaHtml(cfg, nombre, barcodeSvg, precio)}</div>`;
   }, [cfg, nombre, valor, barcodeSvg, precio]);
 
   const setNum = (k: keyof Config, min: number, max: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,20 +208,15 @@ export default function EtiquetaProductoModal({
   function imprimir() {
     if (!valor) return;
     const total = Math.max(1, cfg.cantidad);
-    // Armar filas de `columnas` etiquetas.
-    const labels: string[] = [];
-    for (let i = 0; i < total; i++) labels.push(etiquetaHtml(cfg, nombre, barcodeSvg, precio));
-    const filas: string[] = [];
-    for (let i = 0; i < labels.length; i += cfg.columnas) {
-      filas.push(`<div class="et-row et-page-width">${labels.slice(i, i + cfg.columnas).join("")}</div>`);
-    }
-    const rowW = cfg.columnas * cfg.anchoMm + (cfg.columnas - 1) * cfg.gapXmm;
+    // Grilla que llena la hoja: N columnas y las filas que hagan falta.
+    let labels = "";
+    for (let i = 0; i < total; i++) labels += etiquetaHtml(cfg, nombre, barcodeSvg, precio);
     const html = `<!doctype html><html><head><meta charset="utf-8"><title> </title>
       <style>
-        @page { size: ${rowW}mm ${cfg.altoMm}mm; margin: 0; }
+        @page { size: A4; margin: 0; }
         html, body { margin: 0; padding: 0; background: #fff; }
         ${etiquetaCss(cfg)}
-      </style></head><body>${filas.join("")}
+      </style></head><body><div class="et-sheet">${labels}</div>
       <script>window.onload=function(){setTimeout(function(){window.print();},60);};window.onafterprint=function(){window.close();};<\/script>
       </body></html>`;
     const win = window.open("", "_blank", "width=480,height=640");
@@ -257,15 +263,21 @@ export default function EtiquetaProductoModal({
                 <Campo label="Ancho (mm)"><input type="number" value={cfg.anchoMm} onChange={setNum("anchoMm", 10, 120)} className={inputCls} min={10} max={120} step={0.5} /></Campo>
                 <Campo label="Alto (mm)"><input type="number" value={cfg.altoMm} onChange={setNum("altoMm", 8, 120)} className={inputCls} min={8} max={120} step={0.5} /></Campo>
                 <Campo label="Columnas"><input type="number" value={cfg.columnas} onChange={setNum("columnas", 1, 6)} className={inputCls} min={1} max={6} step={1} /></Campo>
-                <Campo label="Separación (mm)"><input type="number" value={cfg.gapXmm} onChange={setNum("gapXmm", 0, 20)} className={inputCls} min={0} max={20} step={0.5} /></Campo>
+                <Campo label="Sep. horiz. (mm)"><input type="number" value={cfg.gapXmm} onChange={setNum("gapXmm", 0, 20)} className={inputCls} min={0} max={20} step={0.5} /></Campo>
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Campo label="Cantidad"><input type="number" value={cfg.cantidad} onChange={setNum("cantidad", 1, 500)} className={inputCls} min={1} max={500} step={1} /></Campo>
-                <label className="col-span-1 flex items-end gap-2 pb-2 text-sm text-slate-600">
+                <Campo label="Sep. vert. (mm)"><input type="number" value={cfg.gapYmm} onChange={setNum("gapYmm", 0, 20)} className={inputCls} min={0} max={20} step={0.5} /></Campo>
+                <Campo label="Margen sup. (mm)"><input type="number" value={cfg.margenSupMm} onChange={setNum("margenSupMm", 0, 60)} className={inputCls} min={0} max={60} step={0.5} /></Campo>
+                <Campo label="Margen izq. (mm)"><input type="number" value={cfg.margenIzqMm} onChange={setNum("margenIzqMm", 0, 60)} className={inputCls} min={0} max={60} step={0.5} /></Campo>
+                <Campo label="Cantidad"><input type="number" value={cfg.cantidad} onChange={setNum("cantidad", 1, 999)} className={inputCls} min={1} max={999} step={1} /></Campo>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-4">
+                <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" checked={cfg.mostrarNombre} onChange={(e) => setCfg((c) => ({ ...c, mostrarNombre: e.target.checked }))} /> Nombre
                 </label>
-                <label className="col-span-1 flex items-end gap-2 pb-2 text-sm text-slate-600">
+                <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" checked={cfg.mostrarPrecio} onChange={(e) => setCfg((c) => ({ ...c, mostrarPrecio: e.target.checked }))} /> Precio
                 </label>
               </div>
@@ -275,10 +287,11 @@ export default function EtiquetaProductoModal({
                   Código: <span className="font-mono font-semibold">{valor}</span>
                   {producto.codigo_barras?.trim() ? "" : " (usando el SKU porque no hay código de barras cargado)"}.
                 </p>
-                <p className="mb-1 font-semibold">En el diálogo de impresión:</p>
+                <p className="mb-1">Se imprime una <strong>hoja A4 completa</strong> con {cfg.columnas} columnas de etiquetas ({cfg.cantidad} en total).</p>
+                <p className="mb-1 font-semibold">En el diálogo de impresión (para que salga 1:1 y sin bordes):</p>
                 <ol className="ml-4 list-decimal space-y-0.5">
-                  <li>En <strong>Destino</strong>, elegí la impresora <strong>3nStar</strong> (no una impresora A4 común, o sale una etiqueta por hoja).</li>
-                  <li>En <strong>Más opciones</strong>: <strong>Márgenes</strong> = Ninguno, <strong>Escala</strong> = 100%, y desactivá <strong>Encabezados y pies de página</strong>.</li>
+                  <li><strong>Márgenes</strong> = Ninguno y <strong>Escala</strong> = 100% (no «Ajustar»).</li>
+                  <li>Desactivá <strong>Encabezados y pies de página</strong> (saca la fecha/URL/número de los bordes).</li>
                 </ol>
               </div>
             </>
