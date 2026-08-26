@@ -83,8 +83,9 @@ function generarBarcodeSvg(valor: string): string {
   if (w && h) svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.removeAttribute("width");
   svg.removeAttribute("height");
-  // Estirar a lo ancho manteniendo el ratio de barras (solo escala X uniforme).
-  svg.setAttribute("preserveAspectRatio", "none");
+  // Centrado manteniendo la proporción real de las barras (márgenes iguales a
+  // ambos lados). Así queda centrado en toda la etiqueta y escanea mejor.
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   return new XMLSerializer().serializeToString(svg);
 }
 
@@ -137,7 +138,7 @@ function etiquetaCss(cfg: Config): string {
       font-size: ${Math.max(1.8, Math.min(2.6, cfg.altoMm / 9)).toFixed(2)}mm;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
-    .et-barcode { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; }
+    .et-barcode { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
     .et-barcode svg { width: 100%; height: 100%; display: block; }
     .et-codigo { font-size: 1.9mm; letter-spacing: 0.3px; line-height: 1; width: 100%; }
     .et-precio { font-weight: 800; font-size: ${Math.max(2.4, Math.min(3.6, cfg.altoMm / 6.5)).toFixed(2)}mm; line-height: 1; }
