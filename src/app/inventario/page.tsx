@@ -23,7 +23,7 @@ import {
   X,
   Pencil,
   Trash2,
-  Barcode,
+  Tag,
 } from "lucide-react";
 
 const metodoBadge: Record<MetodoValuacion, string> = {
@@ -526,7 +526,7 @@ export default function InventarioPage() {
                             aria-label={`Imprimir etiqueta de ${p.nombre}`}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-all hover:bg-[#4FAEB2]/10 hover:text-[#4FAEB2]"
                           >
-                            <Barcode className="h-4 w-4" />
+                            <Tag className="h-4 w-4" />
                           </button>
                           <Link
                             href={`/inventario/${p.id}/editar`}

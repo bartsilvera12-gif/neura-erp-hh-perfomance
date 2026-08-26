@@ -12,7 +12,7 @@ import ProductImageUploader from "@/components/inventario/ProductImageUploader";
 import SelectFromList from "@/components/inventario/SelectFromList";
 import ProveedoresCostos from "@/components/inventario/ProveedoresCostos";
 import EtiquetaProductoModal from "@/components/inventario/EtiquetaProductoModal";
-import { ShoppingBag, Boxes, ClipboardList, Barcode, type LucideIcon } from "lucide-react";
+import { ShoppingBag, Boxes, ClipboardList, Tag, type LucideIcon } from "lucide-react";
 
 // Opciones estándar de unidad de medida (UX simplificada gastro)
 const UNIDADES_OPCIONES = [
@@ -425,7 +425,7 @@ export default function EditarProductoPage() {
           onClick={() => setEtiquetaOpen(true)}
           className="inline-flex items-center gap-2 rounded-lg border border-[#4FAEB2]/40 bg-[#4FAEB2]/10 px-4 py-2 text-sm font-semibold text-[#3F8E91] transition-colors hover:bg-[#4FAEB2]/20"
         >
-          <Barcode className="h-4 w-4" /> Imprimir etiqueta
+          <Tag className="h-4 w-4" /> Imprimir etiqueta
         </button>
       </div>
 

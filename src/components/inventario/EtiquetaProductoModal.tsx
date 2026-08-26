@@ -13,7 +13,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import JsBarcode from "jsbarcode";
-import { X, Printer, Barcode } from "lucide-react";
+import { X, Printer, Tag } from "lucide-react";
 
 export interface EtiquetaProducto {
   nombre: string;
@@ -128,7 +128,7 @@ function etiquetaCss(cfg: Config): string {
   return `
     .et-row { display: flex; height: ${cfg.altoMm}mm; page-break-inside: avoid; }
     .et-label {
-      width: ${cfg.anchoMm}mm; height: ${cfg.altoMm}mm;
+      width: ${cfg.anchoMm}mm; height: ${cfg.altoMm}mm; flex: 0 0 ${cfg.anchoMm}mm; min-width: 0;
       box-sizing: border-box; padding: 0.6mm 1mm;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       overflow: hidden; background: #fff; color: #000;
@@ -136,8 +136,9 @@ function etiquetaCss(cfg: Config): string {
     }
     .et-label + .et-label { margin-left: ${cfg.gapXmm}mm; }
     .et-nombre {
-      font-weight: 700; line-height: 1.05; width: 100%;
+      font-weight: 700; line-height: 1.05; width: 100%; max-width: 100%;
       font-size: ${Math.max(1.8, Math.min(2.6, cfg.altoMm / 9)).toFixed(2)}mm;
+      overflow-wrap: anywhere; word-break: break-word;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
     .et-barcode { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
@@ -225,7 +226,7 @@ export default function EtiquetaProductoModal({
         {/* Header */}
         <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-[#4FAEB2] to-[#3F8E91] px-5 py-4 text-white">
           <div className="flex items-center gap-2">
-            <Barcode className="h-5 w-5" />
+            <Tag className="h-5 w-5" />
             <h3 className="text-base font-bold">Imprimir etiqueta</h3>
           </div>
           <button onClick={onClose} aria-label="Cerrar" className="flex h-9 w-9 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/15 hover:text-white">
