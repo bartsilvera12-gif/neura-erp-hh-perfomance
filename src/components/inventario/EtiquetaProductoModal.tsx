@@ -202,7 +202,7 @@ export default function EtiquetaProductoModal({
       filas.push(`<div class="et-row et-page-width">${labels.slice(i, i + cfg.columnas).join("")}</div>`);
     }
     const rowW = cfg.columnas * cfg.anchoMm + (cfg.columnas - 1) * cfg.gapXmm;
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas</title>
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title> </title>
       <style>
         @page { size: ${rowW}mm ${cfg.altoMm}mm; margin: 0; }
         html, body { margin: 0; padding: 0; background: #fff; }
@@ -267,11 +267,17 @@ export default function EtiquetaProductoModal({
                 </label>
               </div>
 
-              <p className="mt-4 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
-                Código: <span className="font-mono font-semibold">{valor}</span>
-                {producto.codigo_barras?.trim() ? "" : " (usando el SKU porque no hay código de barras cargado)"}.
-                En el diálogo de impresión elegí la impresora <strong>3nStar</strong> y desactivá márgenes/escala.
-              </p>
+              <div className="mt-4 rounded-lg bg-sky-50 px-3 py-2.5 text-xs text-sky-900">
+                <p className="mb-1.5">
+                  Código: <span className="font-mono font-semibold">{valor}</span>
+                  {producto.codigo_barras?.trim() ? "" : " (usando el SKU porque no hay código de barras cargado)"}.
+                </p>
+                <p className="mb-1 font-semibold">En el diálogo de impresión:</p>
+                <ol className="ml-4 list-decimal space-y-0.5">
+                  <li>En <strong>Destino</strong>, elegí la impresora <strong>3nStar</strong> (no una impresora A4 común, o sale una etiqueta por hoja).</li>
+                  <li>En <strong>Más opciones</strong>: <strong>Márgenes</strong> = Ninguno, <strong>Escala</strong> = 100%, y desactivá <strong>Encabezados y pies de página</strong>.</li>
+                </ol>
+              </div>
             </>
           )}
         </div>
