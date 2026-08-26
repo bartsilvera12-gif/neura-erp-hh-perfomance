@@ -11,7 +11,8 @@ import type { MetodoValuacion } from "@/lib/inventario/types";
 import ProductImageUploader from "@/components/inventario/ProductImageUploader";
 import SelectFromList from "@/components/inventario/SelectFromList";
 import ProveedoresCostos from "@/components/inventario/ProveedoresCostos";
-import { ShoppingBag, Boxes, ClipboardList, type LucideIcon } from "lucide-react";
+import EtiquetaProductoModal from "@/components/inventario/EtiquetaProductoModal";
+import { ShoppingBag, Boxes, ClipboardList, Barcode, type LucideIcon } from "lucide-react";
 
 // Opciones estándar de unidad de medida (UX simplificada gastro)
 const UNIDADES_OPCIONES = [
@@ -59,6 +60,7 @@ export default function EditarProductoPage() {
   const [imagenUrl, setImagenUrl] = useState<string | null>(null);
   const [codigoOriginal, setCodigoOriginal] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [etiquetaOpen, setEtiquetaOpen] = useState(false);
   const [generandoCodigo, setGenerandoCodigo] = useState(false);
   const [generandoSku, setGenerandoSku] = useState(false);
   const [skuPatrones, setSkuPatrones] = useState<{ prefix: string; siguiente: string }[]>([]);
@@ -413,10 +415,31 @@ export default function EditarProductoPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-800">Editar producto</h1>
-        <p className="text-gray-600">Modifica los datos del producto</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">Editar producto</h1>
+          <p className="text-gray-600">Modifica los datos del producto</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setEtiquetaOpen(true)}
+          className="inline-flex items-center gap-2 rounded-lg border border-[#4FAEB2]/40 bg-[#4FAEB2]/10 px-4 py-2 text-sm font-semibold text-[#3F8E91] transition-colors hover:bg-[#4FAEB2]/20"
+        >
+          <Barcode className="h-4 w-4" /> Imprimir etiqueta
+        </button>
       </div>
+
+      {etiquetaOpen && (
+        <EtiquetaProductoModal
+          producto={{
+            nombre: form.nombre,
+            codigo_barras: form.codigo_barras,
+            sku: form.sku,
+            precio_venta: form.precio_venta,
+          }}
+          onClose={() => setEtiquetaOpen(false)}
+        />
+      )}
 
       {id && <ProyeccionProductoCard productoId={id} />}
 
