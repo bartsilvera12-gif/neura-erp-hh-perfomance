@@ -25,7 +25,6 @@ export interface EtiquetaProducto {
 interface Config {
   anchoMm: number;
   altoMm: number;
-  columnas: number;
   gapXmm: number;
   gapYmm: number;
   margenSupMm: number;
@@ -35,16 +34,15 @@ interface Config {
   mostrarNombre: boolean;
 }
 
-const CONFIG_KEY = "hh-etiqueta-config-v3";
+const CONFIG_KEY = "hh-etiqueta-config-v4";
 const DEFAULT_CONFIG: Config = {
   anchoMm: 34,
   altoMm: 22,
-  columnas: 3,
   gapXmm: 3,
   gapYmm: 3,
   margenSupMm: 8,
   margenIzqMm: 6,
-  cantidad: 30,
+  cantidad: 55,
   mostrarPrecio: true,
   mostrarNombre: true,
 };
@@ -132,13 +130,12 @@ function escapeHtml(s: string): string {
 
 /** CSS compartido por preview e impresión, parametrizado por el tamaño. */
 function etiquetaCss(cfg: Config): string {
-  // Ancho de la grilla = margen izq + N columnas + separaciones, para que
-  // entren exactamente `columnas` etiquetas por fila y el resto baje.
-  const sheetW = cfg.margenIzqMm + cfg.columnas * cfg.anchoMm + (cfg.columnas - 1) * cfg.gapXmm;
+  // La grilla ocupa TODO el ancho de la hoja (A4) menos los márgenes; entran
+  // tantas columnas como quepan al tamaño de etiqueta, llenando la hoja.
   return `
     .et-sheet {
-      box-sizing: border-box; width: ${sheetW}mm;
-      padding: ${cfg.margenSupMm}mm 0 0 ${cfg.margenIzqMm}mm;
+      box-sizing: border-box; width: 100%;
+      padding: ${cfg.margenSupMm}mm ${cfg.margenIzqMm}mm 0 ${cfg.margenIzqMm}mm;
       display: flex; flex-wrap: wrap; align-content: flex-start;
       column-gap: ${cfg.gapXmm}mm; row-gap: ${cfg.gapYmm}mm;
     }
@@ -262,12 +259,11 @@ export default function EtiquetaProductoModal({
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Campo label="Ancho (mm)"><input type="number" value={cfg.anchoMm} onChange={setNum("anchoMm", 10, 120)} className={inputCls} min={10} max={120} step={0.5} /></Campo>
                 <Campo label="Alto (mm)"><input type="number" value={cfg.altoMm} onChange={setNum("altoMm", 8, 120)} className={inputCls} min={8} max={120} step={0.5} /></Campo>
-                <Campo label="Columnas"><input type="number" value={cfg.columnas} onChange={setNum("columnas", 1, 6)} className={inputCls} min={1} max={6} step={1} /></Campo>
                 <Campo label="Sep. horiz. (mm)"><input type="number" value={cfg.gapXmm} onChange={setNum("gapXmm", 0, 20)} className={inputCls} min={0} max={20} step={0.5} /></Campo>
+                <Campo label="Sep. vert. (mm)"><input type="number" value={cfg.gapYmm} onChange={setNum("gapYmm", 0, 20)} className={inputCls} min={0} max={20} step={0.5} /></Campo>
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Campo label="Sep. vert. (mm)"><input type="number" value={cfg.gapYmm} onChange={setNum("gapYmm", 0, 20)} className={inputCls} min={0} max={20} step={0.5} /></Campo>
                 <Campo label="Margen sup. (mm)"><input type="number" value={cfg.margenSupMm} onChange={setNum("margenSupMm", 0, 60)} className={inputCls} min={0} max={60} step={0.5} /></Campo>
                 <Campo label="Margen izq. (mm)"><input type="number" value={cfg.margenIzqMm} onChange={setNum("margenIzqMm", 0, 60)} className={inputCls} min={0} max={60} step={0.5} /></Campo>
                 <Campo label="Cantidad"><input type="number" value={cfg.cantidad} onChange={setNum("cantidad", 1, 999)} className={inputCls} min={1} max={999} step={1} /></Campo>
@@ -287,7 +283,7 @@ export default function EtiquetaProductoModal({
                   Código: <span className="font-mono font-semibold">{valor}</span>
                   {producto.codigo_barras?.trim() ? "" : " (usando el SKU porque no hay código de barras cargado)"}.
                 </p>
-                <p className="mb-1">Se imprime una <strong>hoja A4 completa</strong> con {cfg.columnas} columnas de etiquetas ({cfg.cantidad} en total).</p>
+                <p className="mb-1">Se imprime una <strong>hoja A4 completa</strong>: entran tantas columnas como quepan al ancho de etiqueta ({cfg.cantidad} etiquetas en total).</p>
                 <p className="mb-1 font-semibold">En el diálogo de impresión (para que salga 1:1 y sin bordes):</p>
                 <ol className="ml-4 list-decimal space-y-0.5">
                   <li><strong>Márgenes</strong> = Ninguno y <strong>Escala</strong> = 100% (no «Ajustar»).</li>
