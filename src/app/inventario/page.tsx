@@ -9,6 +9,7 @@ import type { Producto, MetodoValuacion } from "@/lib/inventario/types";
 import ExportExcelButton from "@/components/ui/ExportExcelButton";
 import ImportExcelButton from "@/components/ui/ImportExcelButton";
 import EdgeScrollArea from "@/components/ui/EdgeScrollArea";
+import EtiquetaProductoModal from "@/components/inventario/EtiquetaProductoModal";
 import { useIsAdmin } from "@/lib/auth/use-is-admin";
 import {
   Search,
@@ -22,6 +23,7 @@ import {
   X,
   Pencil,
   Trash2,
+  Barcode,
 } from "lucide-react";
 
 const metodoBadge: Record<MetodoValuacion, string> = {
@@ -105,6 +107,7 @@ export default function InventarioPage() {
 
   // Modal de eliminacion
   const [deleting, setDeleting] = useState<Producto | null>(null);
+  const [etiquetaProd, setEtiquetaProd] = useState<Producto | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -516,6 +519,15 @@ export default function InventarioPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setEtiquetaProd(p)}
+                            title="Imprimir etiqueta"
+                            aria-label={`Imprimir etiqueta de ${p.nombre}`}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-all hover:bg-[#4FAEB2]/10 hover:text-[#4FAEB2]"
+                          >
+                            <Barcode className="h-4 w-4" />
+                          </button>
                           <Link
                             href={`/inventario/${p.id}/editar`}
                             title="Editar producto"
@@ -602,6 +614,19 @@ export default function InventarioPage() {
           </div>
         )}
       </section>
+
+      {/* Modal de etiqueta (imprimir sin entrar a la ficha) */}
+      {etiquetaProd && (
+        <EtiquetaProductoModal
+          producto={{
+            nombre: etiquetaProd.nombre,
+            codigo_barras: etiquetaProd.codigo_barras,
+            sku: etiquetaProd.sku,
+            precio_venta: etiquetaProd.precio_venta,
+          }}
+          onClose={() => setEtiquetaProd(null)}
+        />
+      )}
 
       {/* Modal de confirmacion de eliminar */}
       {deleting && (
