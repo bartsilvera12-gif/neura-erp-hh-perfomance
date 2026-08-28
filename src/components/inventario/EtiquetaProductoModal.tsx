@@ -30,6 +30,7 @@ interface Config {
   gapYmm: number;
   margenIzqMm: number;
   cantidad: number;
+  invertir: boolean;
   mostrarPrecio: boolean;
   mostrarNombre: boolean;
 }
@@ -43,6 +44,7 @@ const DEFAULT_CONFIG: Config = {
   gapYmm: 3,
   margenIzqMm: 2,
   cantidad: 30,
+  invertir: false,
   mostrarPrecio: true,
   mostrarNombre: true,
 };
@@ -139,6 +141,7 @@ function etiquetaCss(cfg: Config): string {
       box-sizing: border-box; height: ${pitchH}mm; padding-left: ${cfg.margenIzqMm}mm;
       display: flex; align-items: flex-start; column-gap: ${cfg.gapXmm}mm;
       overflow: hidden; break-inside: avoid;
+      ${cfg.invertir ? "transform: rotate(180deg);" : ""}
     }
     .et-label {
       width: ${cfg.anchoMm}mm; height: ${cfg.altoMm}mm; flex: 0 0 ${cfg.anchoMm}mm; min-width: 0;
@@ -194,7 +197,7 @@ export default function EtiquetaProductoModal({
     if (!previewRef.current) return;
     previewRef.current.innerHTML = `
       <style>${etiquetaCss(cfg)}</style>
-      <div style="display:inline-block">${etiquetaHtml(cfg, nombre, barcodeSvg, precio)}</div>`;
+      <div style="display:inline-block;${cfg.invertir ? "transform:rotate(180deg);" : ""}">${etiquetaHtml(cfg, nombre, barcodeSvg, precio)}</div>`;
   }, [cfg, nombre, valor, barcodeSvg, precio]);
 
   const setNum = (k: keyof Config, min: number, max: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -283,6 +286,9 @@ export default function EtiquetaProductoModal({
                 </label>
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" checked={cfg.mostrarPrecio} onChange={(e) => setCfg((c) => ({ ...c, mostrarPrecio: e.target.checked }))} /> Precio
+                </label>
+                <label className="flex items-center gap-2 text-sm text-slate-600">
+                  <input type="checkbox" checked={cfg.invertir} onChange={(e) => setCfg((c) => ({ ...c, invertir: e.target.checked }))} /> Invertir 180° (si sale al revés)
                 </label>
               </div>
 
