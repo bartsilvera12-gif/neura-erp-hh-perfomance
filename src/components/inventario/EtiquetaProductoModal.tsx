@@ -25,24 +25,24 @@ export interface EtiquetaProducto {
 interface Config {
   anchoMm: number;
   altoMm: number;
+  columnas: number;
   gapXmm: number;
   gapYmm: number;
-  margenSupMm: number;
   margenIzqMm: number;
   cantidad: number;
   mostrarPrecio: boolean;
   mostrarNombre: boolean;
 }
 
-const CONFIG_KEY = "hh-etiqueta-config-v4";
+const CONFIG_KEY = "hh-etiqueta-config-v5";
 const DEFAULT_CONFIG: Config = {
   anchoMm: 34,
   altoMm: 22,
+  columnas: 3,
   gapXmm: 3,
   gapYmm: 3,
-  margenSupMm: 8,
-  margenIzqMm: 6,
-  cantidad: 55,
+  margenIzqMm: 2,
+  cantidad: 30,
   mostrarPrecio: true,
   mostrarNombre: true,
 };
@@ -130,18 +130,18 @@ function escapeHtml(s: string): string {
 
 /** CSS compartido por preview e impresión, parametrizado por el tamaño. */
 function etiquetaCss(cfg: Config): string {
-  // La grilla ocupa TODO el ancho de la hoja (A4) menos los márgenes; entran
-  // tantas columnas como quepan al tamaño de etiqueta, llenando la hoja.
+  // Rollo térmico: cada fila es un "paso" (pitch) = alto de etiqueta + sep.
+  // vertical. Que el pitch coincida con el troquel físico es lo que evita la
+  // deriva (que el contenido se corra y deje etiquetas en blanco).
+  const pitchH = cfg.altoMm + cfg.gapYmm;
   return `
-    .et-sheet {
-      box-sizing: border-box; width: 100%;
-      padding: ${cfg.margenSupMm}mm ${cfg.margenIzqMm}mm 0 ${cfg.margenIzqMm}mm;
-      display: flex; flex-wrap: wrap; align-content: flex-start;
-      column-gap: ${cfg.gapXmm}mm; row-gap: ${cfg.gapYmm}mm;
+    .et-row {
+      box-sizing: border-box; height: ${pitchH}mm; padding-left: ${cfg.margenIzqMm}mm;
+      display: flex; align-items: flex-start; column-gap: ${cfg.gapXmm}mm;
+      overflow: hidden; break-inside: avoid;
     }
     .et-label {
       width: ${cfg.anchoMm}mm; height: ${cfg.altoMm}mm; flex: 0 0 ${cfg.anchoMm}mm; min-width: 0;
-      page-break-inside: avoid; break-inside: avoid;
       box-sizing: border-box; padding: 0.6mm 1mm;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       overflow: hidden; background: #fff; color: #000;
@@ -205,15 +205,23 @@ export default function EtiquetaProductoModal({
   function imprimir() {
     if (!valor) return;
     const total = Math.max(1, cfg.cantidad);
-    // Grilla que llena la hoja: N columnas y las filas que hagan falta.
-    let labels = "";
-    for (let i = 0; i < total; i++) labels += etiquetaHtml(cfg, nombre, barcodeSvg, precio);
+    const cols = Math.max(1, cfg.columnas);
+    // Una etiqueta por celda; se agrupan en filas de `columnas`. Cada fila mide
+    // exactamente un "paso" (alto + sep. vertical) para alinear con el troquel.
+    const label = etiquetaHtml(cfg, nombre, barcodeSvg, precio);
+    let filas = "";
+    for (let i = 0; i < total; i += cols) {
+      const n = Math.min(cols, total - i);
+      filas += `<div class="et-row">${label.repeat(n)}</div>`;
+    }
+    const rowW = cfg.margenIzqMm + cols * cfg.anchoMm + (cols - 1) * cfg.gapXmm;
+    const pitchH = cfg.altoMm + cfg.gapYmm;
     const html = `<!doctype html><html><head><meta charset="utf-8"><title> </title>
       <style>
-        @page { size: A4; margin: 0; }
+        @page { size: ${rowW}mm ${pitchH}mm; margin: 0; }
         html, body { margin: 0; padding: 0; background: #fff; }
         ${etiquetaCss(cfg)}
-      </style></head><body><div class="et-sheet">${labels}</div>
+      </style></head><body>${filas}
       <script>window.onload=function(){setTimeout(function(){window.print();},60);};window.onafterprint=function(){window.close();};<\/script>
       </body></html>`;
     const win = window.open("", "_blank", "width=480,height=640");
@@ -259,12 +267,12 @@ export default function EtiquetaProductoModal({
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Campo label="Ancho (mm)"><input type="number" value={cfg.anchoMm} onChange={setNum("anchoMm", 10, 120)} className={inputCls} min={10} max={120} step={0.5} /></Campo>
                 <Campo label="Alto (mm)"><input type="number" value={cfg.altoMm} onChange={setNum("altoMm", 8, 120)} className={inputCls} min={8} max={120} step={0.5} /></Campo>
+                <Campo label="Columnas"><input type="number" value={cfg.columnas} onChange={setNum("columnas", 1, 6)} className={inputCls} min={1} max={6} step={1} /></Campo>
                 <Campo label="Sep. horiz. (mm)"><input type="number" value={cfg.gapXmm} onChange={setNum("gapXmm", 0, 20)} className={inputCls} min={0} max={20} step={0.5} /></Campo>
-                <Campo label="Sep. vert. (mm)"><input type="number" value={cfg.gapYmm} onChange={setNum("gapYmm", 0, 20)} className={inputCls} min={0} max={20} step={0.5} /></Campo>
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Campo label="Margen sup. (mm)"><input type="number" value={cfg.margenSupMm} onChange={setNum("margenSupMm", 0, 60)} className={inputCls} min={0} max={60} step={0.5} /></Campo>
+                <Campo label="Sep. vert. (mm)"><input type="number" value={cfg.gapYmm} onChange={setNum("gapYmm", 0, 20)} className={inputCls} min={0} max={20} step={0.5} /></Campo>
                 <Campo label="Margen izq. (mm)"><input type="number" value={cfg.margenIzqMm} onChange={setNum("margenIzqMm", 0, 60)} className={inputCls} min={0} max={60} step={0.5} /></Campo>
                 <Campo label="Cantidad"><input type="number" value={cfg.cantidad} onChange={setNum("cantidad", 1, 999)} className={inputCls} min={1} max={999} step={1} /></Campo>
               </div>
@@ -283,11 +291,12 @@ export default function EtiquetaProductoModal({
                   Código: <span className="font-mono font-semibold">{valor}</span>
                   {producto.codigo_barras?.trim() ? "" : " (usando el SKU porque no hay código de barras cargado)"}.
                 </p>
-                <p className="mb-1">Se imprime una <strong>hoja A4 completa</strong>: entran tantas columnas como quepan al ancho de etiqueta ({cfg.cantidad} etiquetas en total).</p>
-                <p className="mb-1 font-semibold">En el diálogo de impresión (para que salga 1:1 y sin bordes):</p>
+                <p className="mb-1">Rollo térmico de <strong>{cfg.columnas} columnas</strong>. Cada fila avanza un paso de <strong>{cfg.altoMm + cfg.gapYmm} mm</strong> (alto + sep. vertical).</p>
+                <p className="mb-1 font-semibold">Para que salga 1:1 y sin deriva:</p>
                 <ol className="ml-4 list-decimal space-y-0.5">
-                  <li><strong>Márgenes</strong> = Ninguno y <strong>Escala</strong> = 100% (no «Ajustar»).</li>
-                  <li>Desactivá <strong>Encabezados y pies de página</strong> (saca la fecha/URL/número de los bordes).</li>
+                  <li>Destino = impresora <strong>3nStar</strong>, <strong>Márgenes</strong> = Ninguno, <strong>Escala</strong> = 100%.</li>
+                  <li>Si el contenido se corre hacia arriba/abajo entre etiquetas, ajustá <strong>Sep. vertical</strong> hasta que cada etiqueta quede centrada.</li>
+                  <li>Si se corre a los lados, ajustá <strong>Margen izq.</strong>. Desactivá <strong>Encabezados y pies</strong>.</li>
                 </ol>
               </div>
             </>
