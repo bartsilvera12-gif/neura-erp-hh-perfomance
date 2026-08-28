@@ -157,7 +157,7 @@ function etiquetaCss(cfg: Config): string {
       overflow-wrap: anywhere; word-break: break-word;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
-    .et-barcode { width: 100%; flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
+    .et-barcode { width: 100%; flex: 0 0 auto; height: ${Math.max(6, cfg.altoMm * 0.4).toFixed(1)}mm; min-width: 0; display: flex; align-items: center; justify-content: center; }
     .et-barcode svg { width: 100%; height: 100%; display: block; }
     .et-precio { flex: 0 0 auto; font-weight: 800; font-size: ${Math.max(2.4, Math.min(3.6, cfg.altoMm / 6.5)).toFixed(2)}mm; line-height: 1; }
   `;
