@@ -42,7 +42,7 @@ const DEFAULT_CONFIG: Config = {
   columnas: 3,
   gapXmm: 3,
   gapYmm: 3,
-  margenIzqMm: 2,
+  margenIzqMm: 0,
   cantidad: 30,
   invertir: false,
   mostrarPrecio: true,
