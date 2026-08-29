@@ -7,6 +7,7 @@ import MontoInput from "@/components/ui/MontoInput";
 import SelectFromList from "@/components/inventario/SelectFromList";
 import { productoExiste, saveProducto } from "@/lib/inventario/storage";
 import type { MetodoValuacion } from "@/lib/inventario/types";
+import EtiquetaProductoModal, { type EtiquetaProducto } from "@/components/inventario/EtiquetaProductoModal";
 import { ShoppingBag, Boxes, ClipboardList, type LucideIcon } from "lucide-react";
 
 // Opciones estándar de unidad de medida para gastro
@@ -47,6 +48,7 @@ export default function NuevoProductoPage() {
     metodo_valuacion: "CPP" as MetodoValuacion,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [etiquetaProd, setEtiquetaProd] = useState<EtiquetaProducto | null>(null);
   const [generandoCodigo, setGenerandoCodigo] = useState(false);
   const [generandoSku, setGenerandoSku] = useState(false);
   const [skuPatrones, setSkuPatrones] = useState<{ prefix: string; siguiente: string }[]>([]);
@@ -383,7 +385,15 @@ export default function NuevoProductoPage() {
         }
       }
 
-      router.push("/inventario");
+      // Éxito: abrir el modal de etiqueta con el producto recién creado para
+      // imprimir el ticket al toque (agiliza la carga). Al cerrarlo se va al
+      // listado.
+      setEtiquetaProd({
+        nombre: form.nombre.trim().toUpperCase(),
+        codigo_barras: codigo,
+        sku: form.sku.trim().toUpperCase(),
+        precio_venta: parseFloat(form.precio_venta) || 0,
+      });
     } catch (err) {
       console.error("[inventario/nuevo] handleSubmit error:", err);
       showErr(err instanceof Error ? err.message : "No se pudo guardar el producto.");
@@ -475,6 +485,16 @@ export default function NuevoProductoPage() {
 
   return (
     <div className="space-y-8">
+
+      {etiquetaProd && (
+        <EtiquetaProductoModal
+          producto={etiquetaProd}
+          onClose={() => {
+            setEtiquetaProd(null);
+            router.push("/inventario");
+          }}
+        />
+      )}
 
       <div>
         <h1 className="text-3xl font-bold text-gray-800">Nuevo producto</h1>
