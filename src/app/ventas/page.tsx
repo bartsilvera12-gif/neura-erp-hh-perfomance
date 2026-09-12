@@ -533,18 +533,13 @@ function AnularVentaModal({
           </div>
         ) : (
           <div className="p-6 sm:p-7">
-            {/* Encabezado: chip de icono suave + título (sin barra roja alarmante). */}
-            <div className="flex items-start gap-3.5">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-50 ring-1 ring-rose-100">
-                <Ban className="h-[22px] w-[22px] text-rose-600" aria-hidden />
-              </div>
-              <div className="min-w-0 pt-0.5">
-                <h3 className="text-base font-semibold leading-tight text-slate-900">
-                  Anular venta{" "}
-                  <span className="font-mono text-[15px] text-slate-500">{venta.numero_control}</span>
-                </h3>
-                <p className="mt-0.5 text-[13px] text-slate-500">Esta acción no se puede deshacer.</p>
-              </div>
+            {/* Encabezado limpio: título + subtítulo, sin chip de icono. */}
+            <div>
+              <h3 className="text-lg font-semibold leading-tight text-slate-900">
+                Anular venta{" "}
+                <span className="font-mono text-base text-slate-500">{venta.numero_control}</span>
+              </h3>
+              <p className="mt-1 text-[13px] text-slate-500">Esta acción no se puede deshacer.</p>
             </div>
 
             {/* Qué pasa — lista escaneable en un panel suave. */}
