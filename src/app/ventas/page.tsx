@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { RotateCcw, Printer, FileText, Truck, ScrollText, Ban, X, Calendar, User, Tag, Wallet, type LucideIcon } from "lucide-react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { RotateCcw, Printer, FileText, Truck, ScrollText, Ban, Check, X, Calendar, User, Tag, Wallet, type LucideIcon } from "lucide-react";
 import EdgeScrollArea from "@/components/ui/EdgeScrollArea";
 import { FancySelect } from "@/components/ui/FancySelect";
 import MobileFab from "@/components/ui/MobileFab";
@@ -514,33 +514,53 @@ function AnularVentaModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
       onClick={anulando ? undefined : onClose}
     >
       <div
-        className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/5"
+        className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-900/10"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 bg-gradient-to-r from-rose-600 to-rose-500 px-6 py-4 text-white">
-          <Ban className="h-5 w-5 shrink-0" aria-hidden />
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold leading-tight">Anular venta {venta.numero_control}</h3>
-            <p className="text-[11px] text-white/80 leading-tight">Repone stock, ajusta la caja y anula la factura</p>
+        {ok ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 ring-1 ring-emerald-200">
+              <Check className="h-7 w-7 text-emerald-600" aria-hidden />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">Venta anulada</h3>
+              <p className="mt-0.5 text-sm text-slate-500">Actualizando la lista…</p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="p-6 sm:p-7">
+            {/* Encabezado: chip de icono suave + título (sin barra roja alarmante). */}
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-50 ring-1 ring-rose-100">
+                <Ban className="h-[22px] w-[22px] text-rose-600" aria-hidden />
+              </div>
+              <div className="min-w-0 pt-0.5">
+                <h3 className="text-base font-semibold leading-tight text-slate-900">
+                  Anular venta{" "}
+                  <span className="font-mono text-[15px] text-slate-500">{venta.numero_control}</span>
+                </h3>
+                <p className="mt-0.5 text-[13px] text-slate-500">Esta acción no se puede deshacer.</p>
+              </div>
+            </div>
 
-        <div className="px-6 py-5">
-          {ok ? (
-            <p className="text-sm font-medium text-emerald-700">✓ Venta anulada. Actualizando…</p>
-          ) : (
-            <>
-              <p className="text-xs text-slate-600">
-                Se repondrá el stock de los productos, la caja dejará de contar esta venta y la factura quedará
-                <span className="font-semibold"> Anulada</span>. Si la factura ya fue aprobada por la SET, primero se
-                cancela ahí y solo si la SET lo acepta se anula.
-              </p>
-              <label className="mt-4 block text-xs font-semibold text-slate-700">
-                Motivo de la anulación <span className="text-rose-600">*</span>
+            {/* Qué pasa — lista escaneable en un panel suave. */}
+            <div className="mt-5 space-y-2.5 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
+              <ConsecuenciaRow icon={<RotateCcw className="h-4 w-4" aria-hidden />} text="Se repone el stock de los productos" />
+              <ConsecuenciaRow icon={<Wallet className="h-4 w-4" aria-hidden />} text="La caja deja de contar esta venta" />
+              <ConsecuenciaRow
+                icon={<ScrollText className="h-4 w-4" aria-hidden />}
+                text={<>La factura queda <span className="font-semibold text-slate-700">anulada</span> (si estaba aprobada en la SET, se cancela ahí primero)</>}
+              />
+            </div>
+
+            {/* Motivo */}
+            <div className="mt-5">
+              <label className="block text-[13px] font-semibold text-slate-700">
+                Motivo de la anulación <span className="text-rose-500">*</span>
               </label>
               <textarea
                 value={motivo}
@@ -549,39 +569,61 @@ function AnularVentaModal({
                 autoFocus
                 disabled={anulando}
                 placeholder="Ej.: error de carga, el cliente se arrepintió, producto equivocado…"
-                className="mt-1 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 disabled:bg-slate-50"
+                className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm transition placeholder:text-slate-400 focus:border-rose-300 focus:outline-none focus:ring-4 focus:ring-rose-100 disabled:bg-slate-50"
               />
               {!motivoValido && motivo.length > 0 && (
-                <p className="mt-1 text-[11px] text-slate-400">Mínimo 5 caracteres.</p>
+                <p className="mt-1 text-[11px] text-slate-400">Escribí al menos 5 caracteres.</p>
               )}
-              {error && (
-                <div className="mt-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                  <span className="mt-0.5 text-sm leading-none">⚠</span>
-                  <span className="font-medium">{error}</span>
-                </div>
-              )}
-              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  disabled={anulando}
-                  className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmar}
-                  disabled={!motivoValido || anulando}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {anulando ? "Anulando…" : "Anular venta"}
-                </button>
+            </div>
+
+            {error && (
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-[13px] text-rose-700">
+                <span className="mt-px text-sm leading-none">⚠</span>
+                <span className="font-medium">{error}</span>
               </div>
-            </>
-          )}
-        </div>
+            )}
+
+            <div className="mt-6 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={anulando}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmar}
+                disabled={!motivoValido || anulando}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 text-sm font-semibold text-white shadow-sm shadow-rose-600/20 transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300 disabled:shadow-none"
+              >
+                {anulando ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden />
+                    Anulando…
+                  </>
+                ) : (
+                  <>
+                    <Ban className="h-4 w-4" aria-hidden />
+                    Anular venta
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+/** Fila de "qué pasa al anular": icono suave + texto. */
+function ConsecuenciaRow({ icon, text }: { icon: ReactNode; text: ReactNode }) {
+  return (
+    <div className="flex items-start gap-2.5 text-[13px] leading-snug text-slate-600">
+      <span className="mt-px shrink-0 text-slate-400">{icon}</span>
+      <span>{text}</span>
     </div>
   );
 }
