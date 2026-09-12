@@ -43,7 +43,21 @@ export async function loadValidatedSifenPayload(
     return { ok: false, error: { status: 404, message: "Factura no encontrada" } };
   }
 
-  const clienteId = factura.cliente_id as string;
+  // Venta de mostrador (sin cliente): cliente_id es null. NO se consulta `clientes`
+  // con id null — PostgREST mandaría `id=eq.null` y Postgres revienta con
+  // "invalid input syntax for type uuid: null". Sin cliente el DE va como
+  // consumidor final innominado (lo resuelve build-payload).
+  const clienteId = ((factura.cliente_id as string | null) ?? "").trim();
+  const clientePromise = clienteId
+    ? supabase
+        .from("clientes")
+        .select(
+          "id, empresa, nombre_contacto, nombre, ruc, documento, direccion, telefono, email, pais, sifen_receptor_extranjero, sifen_codigo_pais, sifen_tipo_doc_receptor, sifen_receptor_manual, sifen_receptor_naturaleza, sifen_ti_ope, sifen_num_id_de, sifen_direccion_de, sifen_num_casa_de, sifen_descripcion_tipo_doc"
+        )
+        .eq("id", clienteId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle()
+    : Promise.resolve({ data: null, error: null });
 
   const [itemsRes, clienteRes, configRes, electronicaRes] = await Promise.all([
     supabase
@@ -52,14 +66,7 @@ export async function loadValidatedSifenPayload(
       .eq("factura_id", fid)
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: true }),
-    supabase
-      .from("clientes")
-      .select(
-        "id, empresa, nombre_contacto, nombre, ruc, documento, direccion, telefono, email, pais, sifen_receptor_extranjero, sifen_codigo_pais, sifen_tipo_doc_receptor, sifen_receptor_manual, sifen_receptor_naturaleza, sifen_ti_ope, sifen_num_id_de, sifen_direccion_de, sifen_num_casa_de, sifen_descripcion_tipo_doc"
-      )
-      .eq("id", clienteId)
-      .eq("empresa_id", empresaId)
-      .maybeSingle(),
+    clientePromise,
     supabase
       .from("empresa_sifen_config")
       .select(
@@ -91,7 +98,7 @@ export async function loadValidatedSifenPayload(
   const buildInput: BuildSifenPayloadInput = {
     factura: {
       id: factura.id as string,
-      cliente_id: factura.cliente_id as string,
+      cliente_id: (factura.cliente_id as string | null) ?? null,
       numero_factura: factura.numero_factura as string,
       fecha: factura.fecha as string,
       tipo: factura.tipo as string,

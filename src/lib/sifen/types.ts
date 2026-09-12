@@ -281,6 +281,12 @@ export interface SifenPayloadReceptor {
   telefono: string | null;
   email: string | null;
   /**
+   * Consumidor final innominado (venta de mostrador sin datos del comprador): el
+   * DE va como no contribuyente B2C con iTipIDRec=5 "Innominado", dNumIDRec="0",
+   * dNomRec="Sin Nombre". Se activa cuando la factura no tiene cliente.
+   */
+  receptor_innominado?: boolean;
+  /**
    * Si true, el DE usa receptor no contribuyente extranjero: sin dRucRec/dDVRec;
    * cPaisRec + iTipIDRec + dDTipIDRec + dNumIDRec.
    */

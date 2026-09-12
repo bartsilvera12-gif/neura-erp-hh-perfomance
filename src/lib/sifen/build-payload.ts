@@ -39,7 +39,8 @@ function num(v: unknown): number {
 
 export interface SifenBuildFacturaRow {
   id: string;
-  cliente_id: string;
+  /** null en ventas de mostrador (sin cliente) → DE a consumidor final innominado. */
+  cliente_id: string | null;
   numero_factura: string;
   fecha: string;
   tipo: string;
@@ -241,6 +242,24 @@ function validateReceptor(
   cliente: SifenBuildClienteRow | null
 ): { ok: true; receptor: SifenPayloadReceptor } | { ok: false; error: string } {
   if (!cliente) {
+    // Venta de mostrador (sin cliente): consumidor final innominado (B2C). El DE
+    // se emite igual, sin datos del comprador. Solo si NO hay cliente_id: si la
+    // factura tenía cliente_id pero no se pudo cargar el cliente, es un error real.
+    if (!trimStr(factura.cliente_id)) {
+      return {
+        ok: true,
+        receptor: {
+          cliente_id: "",
+          nombre: "Sin Nombre",
+          documento: null,
+          ruc: null,
+          direccion: null,
+          telefono: null,
+          email: null,
+          receptor_innominado: true,
+        },
+      };
+    }
     return {
       ok: false,
       error: "No se encontró el cliente asociado a la factura (cliente_id inválido o sin acceso).",
@@ -250,7 +269,9 @@ function validateReceptor(
     return { ok: false, error: "El cliente cargado no coincide con cliente_id de la factura." };
   }
   if (clienteUsaReceptorSifenManual(cliente)) {
-    return validateReceptorExplicitManual(cliente, factura.cliente_id);
+    // Acá el cliente existe y coincide con factura.cliente_id (chequeado arriba),
+    // así que cliente_id es un string no vacío.
+    return validateReceptorExplicitManual(cliente, trimStr(factura.cliente_id));
   }
   const nombre = nombreReceptor(cliente);
   if (!nombre) {
