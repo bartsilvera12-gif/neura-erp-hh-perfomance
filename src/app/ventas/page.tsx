@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { RotateCcw, Printer, FileText, Truck, ScrollText, X, Calendar, User, Tag, Wallet, type LucideIcon } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { RotateCcw, Printer, FileText, Truck, ScrollText, Ban, X, Calendar, User, Tag, Wallet, type LucideIcon } from "lucide-react";
 import EdgeScrollArea from "@/components/ui/EdgeScrollArea";
 import { FancySelect } from "@/components/ui/FancySelect";
 import MobileFab from "@/components/ui/MobileFab";
@@ -105,6 +105,8 @@ export default function VentasPage() {
   const [devolverVentaId, setDevolverVentaId] = useState<string | null>(null);
   const [filtroIva,  setFiltroIva]  = useState<TipoIvaVenta | "">("");
   const [detalle,    setDetalle]    = useState<Venta | null>(null);
+  // Anular venta: la venta seleccionada para el modal de confirmación.
+  const [anularObj,  setAnularObj]  = useState<Venta | null>(null);
 
   // Feature flag server-side: sin él, la UI de devoluciones no se muestra.
   useEffect(() => {
@@ -114,6 +116,16 @@ export default function VentasPage() {
       .then((j) => { if (!cancelled) setDevolucionesOn(j?.data?.enabled === true); })
       .catch(() => { if (!cancelled) setDevolucionesOn(false); });
     return () => { cancelled = true; };
+  }, []);
+
+  const recargarVentas = useCallback(async () => {
+    const data = await getVentas();
+    const ordenadas = [...data].sort((a, b) => {
+      const ta = new Date(a.fecha).getTime();
+      const tb = new Date(b.fecha).getTime();
+      return tb - ta || b.numero_control.localeCompare(a.numero_control);
+    });
+    setTodas(ordenadas);
   }, []);
 
   useEffect(() => {
@@ -279,9 +291,16 @@ export default function VentasPage() {
                 filtradas.map((v) => {
                   const cantTotal = v.items.reduce((s, i) => s + i.cantidad, 0);
                   return (
-                    <tr key={v.id} onClick={() => setDetalle(v)} className="border-b border-slate-200 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors cursor-pointer">
+                    <tr key={v.id} onClick={() => setDetalle(v)} className={`border-b border-slate-200 last:border-0 hover:bg-[#4FAEB2]/[0.04] transition-colors cursor-pointer ${v.estado === "anulada" ? "opacity-60" : ""}`}>
                       <td className="py-4 pr-4 font-mono text-xs text-gray-500 align-middle">
-                        {v.numero_control}
+                        <div className="flex items-center gap-2">
+                          <span>{v.numero_control}</span>
+                          {v.estado === "anulada" && (
+                            <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">
+                              Anulada
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-4 pr-4 align-middle">
                         <ResumenProductos v={v} />
@@ -324,7 +343,7 @@ export default function VentasPage() {
                       <td className="py-4 text-center align-middle" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center gap-1.5">
                           {/* El motor rechaza ventas anuladas server-side con un mensaje claro. */}
-                          {devolucionesOn && (
+                          {devolucionesOn && v.estado !== "anulada" && (
                             <button
                               type="button"
                               onClick={() => setDevolverVentaId(v.id)}
@@ -383,6 +402,18 @@ export default function VentasPage() {
                               Remisión
                             </a>
                           )}
+                          {/* Anular: repone stock, ajusta caja y anula la factura (y el DE en la SET si estaba aprobado). */}
+                          {v.estado !== "anulada" && (
+                            <button
+                              type="button"
+                              onClick={() => setAnularObj(v)}
+                              className={`${BTN_ACCION} border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100`}
+                              title="Anular la venta (repone stock, ajusta caja y anula la factura)"
+                            >
+                              <Ban className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                              Anular
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -412,6 +443,144 @@ export default function VentasPage() {
           }}
         />
       )}
+
+      {anularObj && (
+        <AnularVentaModal
+          venta={anularObj}
+          onClose={() => setAnularObj(null)}
+          onDone={async () => {
+            setAnularObj(null);
+            await recargarVentas();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Modal de anulación de venta ─────────────────────────────────────────────────
+
+function AnularVentaModal({
+  venta,
+  onClose,
+  onDone,
+}: {
+  venta: Venta;
+  onClose: () => void;
+  onDone: () => void | Promise<void>;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const [anulando, setAnulando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+
+  const motivoValido = motivo.trim().length >= 5;
+
+  async function confirmar() {
+    if (!motivoValido || anulando) return;
+    setAnulando(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/ventas/${venta.id}/anular`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ motivo: motivo.trim() }),
+      });
+      let json: { success?: boolean; error?: string } | null = null;
+      try {
+        const ct = (res.headers.get("content-type") ?? "").toLowerCase();
+        if (ct.includes("application/json")) json = await res.json();
+      } catch { json = null; }
+      if (!res.ok || !json?.success) {
+        setError(
+          (json && typeof json.error === "string" && json.error) ||
+            (res.status === 502 || res.status === 503 || res.status === 504
+              ? "El servidor no está disponible en este momento. Reintentá en unos segundos."
+              : `No se pudo anular la venta (error ${res.status}).`)
+        );
+        return;
+      }
+      setOk(true);
+      // Breve confirmación visual antes de cerrar y refrescar.
+      setTimeout(() => { void onDone(); }, 700);
+    } catch {
+      setError("No hay conexión con el servidor. Reintentá en unos segundos.");
+    } finally {
+      setAnulando(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+      onClick={anulando ? undefined : onClose}
+    >
+      <div
+        className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 bg-gradient-to-r from-rose-600 to-rose-500 px-6 py-4 text-white">
+          <Ban className="h-5 w-5 shrink-0" aria-hidden />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold leading-tight">Anular venta {venta.numero_control}</h3>
+            <p className="text-[11px] text-white/80 leading-tight">Repone stock, ajusta la caja y anula la factura</p>
+          </div>
+        </div>
+
+        <div className="px-6 py-5">
+          {ok ? (
+            <p className="text-sm font-medium text-emerald-700">✓ Venta anulada. Actualizando…</p>
+          ) : (
+            <>
+              <p className="text-xs text-slate-600">
+                Se repondrá el stock de los productos, la caja dejará de contar esta venta y la factura quedará
+                <span className="font-semibold"> Anulada</span>. Si la factura ya fue aprobada por la SET, primero se
+                cancela ahí y solo si la SET lo acepta se anula.
+              </p>
+              <label className="mt-4 block text-xs font-semibold text-slate-700">
+                Motivo de la anulación <span className="text-rose-600">*</span>
+              </label>
+              <textarea
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                rows={3}
+                autoFocus
+                disabled={anulando}
+                placeholder="Ej.: error de carga, el cliente se arrepintió, producto equivocado…"
+                className="mt-1 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400 disabled:bg-slate-50"
+              />
+              {!motivoValido && motivo.length > 0 && (
+                <p className="mt-1 text-[11px] text-slate-400">Mínimo 5 caracteres.</p>
+              )}
+              {error && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  <span className="mt-0.5 text-sm leading-none">⚠</span>
+                  <span className="font-medium">{error}</span>
+                </div>
+              )}
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={anulando}
+                  className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmar}
+                  disabled={!motivoValido || anulando}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {anulando ? "Anulando…" : "Anular venta"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

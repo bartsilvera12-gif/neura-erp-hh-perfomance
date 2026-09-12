@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
-import type { Venta, LineaVenta, TipoIvaVenta, TipoPrecioVenta } from "@/lib/ventas/types";
+import type { Venta, LineaVenta, TipoIvaVenta, TipoPrecioVenta, VentaEstado } from "@/lib/ventas/types";
 
 interface VentaRow {
   id: string;
@@ -16,6 +16,7 @@ interface VentaRow {
   tipo_venta: string;
   plazo_dias: number | null;
   fecha: string;
+  estado?: string | null;
   usuario_nombre?: string | null;
 }
 
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
     const ventasQ = await ctx.supabase
       .from("ventas")
       .select(
-        "id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva, total, tipo_venta, plazo_dias, metodo_pago, fecha, cliente_id, factura_id, genera_nota_remision, nota_remision_numero, usuario_nombre"
+        "id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva, total, tipo_venta, plazo_dias, metodo_pago, fecha, estado, cliente_id, factura_id, genera_nota_remision, nota_remision_numero, usuario_nombre"
       )
       .eq("empresa_id", empresaId)
       .order("fecha", { ascending: false })
@@ -101,6 +102,7 @@ export async function GET(request: NextRequest) {
         monto_iva: num(r.monto_iva),
         total: num(r.total),
         tipo_venta: r.tipo_venta === "CREDITO" ? "CREDITO" : "CONTADO",
+        estado: (r.estado ?? undefined) as VentaEstado | undefined,
         plazo_dias: r.plazo_dias ?? undefined,
         metodo_pago: (r as unknown as { metodo_pago?: string }).metodo_pago === "tarjeta"
           ? "tarjeta"

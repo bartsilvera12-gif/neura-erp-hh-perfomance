@@ -1,5 +1,7 @@
 export type TipoIvaVenta = "EXENTA" | "5%" | "10%";
 export type TipoVenta   = "CONTADO" | "CREDITO";
+/** Estado de la venta (columna `ventas.estado`). */
+export type VentaEstado = "pendiente" | "completada" | "anulada" | "parcialmente_devuelta" | "devuelta_total";
 export type MonedaVenta = "GS" | "USD";
 export type MetodoPago  = "efectivo" | "tarjeta" | "transferencia";
 /** Nivel de precio elegido para la línea de venta.
@@ -37,6 +39,9 @@ export interface Venta {
   /** UUID en base de datos (antes del bloque DB-first era numérico local). */
   id:             string;
   numero_control: string;   // VTA-000001, VTA-000002, …
+
+  /** Estado de la venta. Opcional: no todos los flujos lo traen (default "completada"). */
+  estado?:        VentaEstado;
 
   items: LineaVenta[];       // 1 o más productos
 
