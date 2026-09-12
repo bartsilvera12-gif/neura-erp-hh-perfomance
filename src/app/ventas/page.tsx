@@ -366,8 +366,9 @@ export default function VentasPage() {
                               Ver factura
                             </Link>
                           )}
-                          {/* Excluyentes: con cliente la venta se factura; sin cliente solo lleva ticket interno. */}
-                          {v.cliente_id ? (
+                          {/* Imprimir directo SOLO si la venta no tiene factura: si la tiene,
+                              se imprime desde "Ver factura" (evita el botón duplicado). */}
+                          {!v.factura_id && (v.cliente_id ? (
                             <a
                               href={`/api/ventas/${v.id}/factura`}
                               target="_blank"
@@ -384,12 +385,12 @@ export default function VentasPage() {
                               target="_blank"
                               rel="noopener"
                               className={`${BTN_ACCION} border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50`}
-                              title="Ticket interno (venta sin cliente, no lleva factura)"
+                              title="Ticket interno (venta sin factura)"
                             >
                               <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
                               Imprimir
                             </a>
-                          )}
+                          ))}
                           {v.genera_nota_remision && (
                             <a
                               href={`/api/ventas/${v.id}/ticket?tipo=remision`}
