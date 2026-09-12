@@ -1,6 +1,33 @@
 import type { Venta } from "./types";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
+/**
+ * Lee el cuerpo de una respuesta como JSON de forma SEGURA. Si el servidor no
+ * devolvió JSON (p. ej. la página HTML de un 502/504 de Cloudflare cuando el
+ * contenedor de la app se reinicia), devuelve null en lugar de romper — así
+ * nunca se vuelca el HTML crudo del gateway en la pantalla del cajero.
+ */
+async function parseJsonSafe(res: Response): Promise<Record<string, unknown> | null> {
+  const ct = (res.headers.get("content-type") ?? "").toLowerCase();
+  if (!ct.includes("application/json")) return null;
+  try {
+    return (await res.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/** Mensaje claro y accionable para el cajero según el status HTTP de error. */
+function mensajeErrorHttp(status: number): string {
+  if (status === 502 || status === 503 || status === 504) {
+    return "El servidor no está disponible en este momento. Esperá unos segundos y reintentá — la venta no se registró.";
+  }
+  if (status === 401 || status === 403) {
+    return "Tu sesión expiró. Volvé a iniciar sesión y reintentá.";
+  }
+  return `No se pudo registrar la venta (error ${status}).`;
+}
+
 /** Un faltante de stock devuelto por el backend (409) para el modal de confirmación. */
 export type FaltanteStock = {
   tipo: "producto" | "insumo";
@@ -121,7 +148,10 @@ export async function saveVenta(
       }),
     });
 
-    const json = (await res.json()) as {
+    // Lectura segura del cuerpo: ante un 502/504 (Cloudflare devuelve HTML) esto
+    // da null y caemos a un mensaje por status, en vez de volcar el HTML del
+    // gateway en la pantalla. El backend de venta siempre responde JSON.
+    const json = (await parseJsonSafe(res)) as {
       success?: boolean;
       data?: {
         venta?: Venta;
@@ -133,13 +163,13 @@ export async function saveVenta(
       };
       error?: string;
       faltantes?: FaltanteStock[];
-    };
+    } | null;
 
-    if (!res.ok || !json.success || !json.data?.venta) {
+    if (!res.ok || !json || json.success !== true || !json.data?.venta) {
       return {
         success: false,
-        error: json.error ?? `No se pudo registrar la venta (${res.status}).`,
-        faltantes: Array.isArray(json.faltantes) ? json.faltantes : undefined,
+        error: (typeof json?.error === "string" && json.error) || mensajeErrorHttp(res.status),
+        faltantes: json && Array.isArray(json.faltantes) ? json.faltantes : undefined,
       };
     }
 
@@ -152,8 +182,11 @@ export async function saveVenta(
       sifenEncolado: json.data.sifen_encolado === true,
       sifenWarning: json.data.sifen_warning ?? null,
     };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error de red.";
-    return { success: false, error: msg };
+  } catch {
+    // fetch solo rechaza por fallo de red real (sin respuesta HTTP) o timeout.
+    return {
+      success: false,
+      error: "No hay conexión con el servidor. Verificá tu internet y reintentá — la venta no se registró.",
+    };
   }
 }
