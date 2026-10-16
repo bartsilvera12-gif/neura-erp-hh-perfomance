@@ -33,15 +33,26 @@ export async function GET(request: NextRequest) {
     const tipo = (new URL(request.url).searchParams.get("tipo") ?? "reventa").toLowerCase();
     const prefijoTipo = PREFIJO_TIPO[tipo] ?? "REV";
 
-    const { data, error } = await ctx.supabase
-      .from("productos")
-      .select("sku")
-      .eq("empresa_id", ctx.auth.empresa_id);
-    if (error) throw new Error(error.message);
+    // Traemos TODOS los SKUs paginando: PostgREST corta en 1000 filas por
+    // página aunque no se pida límite, y si hay >1000 productos el cálculo del
+    // "próximo número" se queda ciego y sugiere SKUs que ya existen.
+    const PAGE = 1000;
+    const skus: Array<{ sku: string | null }> = [];
+    for (let desde = 0; ; desde += PAGE) {
+      const { data, error } = await ctx.supabase
+        .from("productos")
+        .select("sku")
+        .eq("empresa_id", ctx.auth.empresa_id)
+        .range(desde, desde + PAGE - 1);
+      if (error) throw new Error(error.message);
+      const lote = (data ?? []) as Array<{ sku: string | null }>;
+      skus.push(...lote);
+      if (lote.length < PAGE) break; // última página
+    }
 
     // prefix -> { maxNum, width }
     const map = new Map<string, { maxNum: number; width: number }>();
-    for (const r of (data ?? []) as Array<{ sku: string | null }>) {
+    for (const r of skus) {
       const p = r.sku ? parseSku(r.sku) : null;
       if (!p) continue;
       const cur = map.get(p.prefix);
