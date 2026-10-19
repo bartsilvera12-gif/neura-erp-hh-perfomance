@@ -104,13 +104,12 @@ export async function GET(request: NextRequest) {
         tipo_venta: r.tipo_venta === "CREDITO" ? "CREDITO" : "CONTADO",
         estado: (r.estado ?? undefined) as VentaEstado | undefined,
         plazo_dias: r.plazo_dias ?? undefined,
-        metodo_pago: (r as unknown as { metodo_pago?: string }).metodo_pago === "tarjeta"
-          ? "tarjeta"
-          : (r as unknown as { metodo_pago?: string }).metodo_pago === "transferencia"
-          ? "transferencia"
-          : (r as unknown as { metodo_pago?: string }).metodo_pago === "efectivo"
-          ? "efectivo"
-          : undefined,
+        metodo_pago: ((): "efectivo" | "tarjeta" | "transferencia" | "qr" | "mixto" | undefined => {
+          const mp = (r as unknown as { metodo_pago?: string }).metodo_pago;
+          return mp === "tarjeta" || mp === "transferencia" || mp === "efectivo" || mp === "qr" || mp === "mixto"
+            ? mp
+            : undefined;
+        })(),
         cliente_id: (r as unknown as { cliente_id?: string | null }).cliente_id ?? null,
         factura_id: (r as unknown as { factura_id?: string | null }).factura_id ?? null,
         genera_nota_remision: (r as unknown as { genera_nota_remision?: boolean }).genera_nota_remision === true,

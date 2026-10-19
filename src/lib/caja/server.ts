@@ -795,15 +795,37 @@ async function computeResumen(
   // Ventas asociadas (excluye anuladas si la columna estado existe).
   const vQ = await sb
     .from("ventas")
-    .select("total, metodo_pago, estado")
+    .select("id, total, metodo_pago, estado")
     .eq("empresa_id", empresaId)
     .eq("caja_id", caja.id);
   if (vQ.error) throw new Error(vQ.error.message);
   const ventas = (vQ.data ?? []) as unknown as Array<{
+    id: string;
     total: number | string;
     metodo_pago: string | null;
     estado: string | null;
   }>;
+
+  // Detalle de cobro por venta: es la fuente de verdad del medio de pago. Una
+  // venta puede pagarse combinando varias formas (pago mixto) o saldo a favor +
+  // efectivo; usando solo `ventas.metodo_pago` el arqueo contaría TODO el total
+  // como efectivo e inflaría el esperado. Se reparte por el detalle igual que el
+  // reporte de cajas. saldo_favor/qr/billetera/otro no son plata del cajón.
+  const ventasActivasIds = ventas.filter((v) => v.estado !== "anulada").map((v) => v.id);
+  const detallePorVenta = new Map<string, Array<{ metodo_pago: string; monto: number }>>();
+  if (ventasActivasIds.length > 0) {
+    const pdQ = await sb
+      .from("ventas_pagos_detalle")
+      .select("venta_id, metodo_pago, monto")
+      .eq("empresa_id", empresaId)
+      .in("venta_id", ventasActivasIds);
+    if (pdQ.error) throw new Error(pdQ.error.message);
+    for (const d of (pdQ.data ?? []) as Array<{ venta_id: string; metodo_pago: string; monto: number | string }>) {
+      const arr = detallePorVenta.get(d.venta_id) ?? [];
+      arr.push({ metodo_pago: d.metodo_pago, monto: num(d.monto) });
+      detallePorVenta.set(d.venta_id, arr);
+    }
+  }
 
   let totalVendido = 0;
   let totalEfectivo = 0;
@@ -815,7 +837,17 @@ async function computeResumen(
     count++;
     const t = num(v.total);
     totalVendido += t;
-    if (v.metodo_pago === "tarjeta") totalTarjeta += t;
+    // Se reparte por el detalle de cobro (soporta pagos mixtos). Si una venta no
+    // tuviera detalle (ventas viejas), se cae al método único de la venta.
+    const det = detallePorVenta.get(v.id);
+    if (det && det.length > 0) {
+      for (const d of det) {
+        if (d.metodo_pago === "tarjeta") totalTarjeta += d.monto;
+        else if (d.metodo_pago === "transferencia") totalTransferencia += d.monto;
+        else if (d.metodo_pago === "efectivo") totalEfectivo += d.monto;
+        // saldo_favor / qr / billetera / otro: no suman al efectivo del cajón.
+      }
+    } else if (v.metodo_pago === "tarjeta") totalTarjeta += t;
     else if (v.metodo_pago === "transferencia") totalTransferencia += t;
     else totalEfectivo += t; // efectivo o sin especificar
   }

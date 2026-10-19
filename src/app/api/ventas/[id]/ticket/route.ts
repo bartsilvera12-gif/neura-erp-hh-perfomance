@@ -118,7 +118,22 @@ function metodoPagoLabel(m: string | null | undefined): string {
   if (m === "tarjeta") return "Tarjeta";
   if (m === "transferencia") return "Transferencia";
   if (m === "efectivo") return "Efectivo";
+  if (m === "qr") return "QR / Billetera";
+  if (m === "mixto") return "Mixto";
   return "—";
+}
+
+/** Etiqueta corta de una forma de pago del desglose (ventas_pagos_detalle). */
+function metodoDetalleLabel(m: string): string {
+  switch (m) {
+    case "efectivo": return "Efectivo";
+    case "transferencia": return "Transferencia";
+    case "tarjeta": return "Tarjeta";
+    case "qr": return "QR";
+    case "billetera": return "Billetera";
+    case "saldo_favor": return "Saldo a favor";
+    default: return "Otro";
+  }
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -171,8 +186,10 @@ function renderCopia(opts: {
   fontPx: number;
   isLast: boolean;
   negocio: string;
+  /** Desglose de formas de pago (solo ventas con pago mixto). */
+  pagosMixto?: Array<{ metodo_pago: string; monto: number }>;
 }): string {
-  const { tipo, venta, items, brief, fontPx, isLast } = opts;
+  const { tipo, venta, items, brief, fontPx, isLast, pagosMixto } = opts;
   const showPrices = tipo === "cliente";
   const sectorBadge = tipo === "pizzeria" ? "COMANDA PIZZERÍA" : tipo === "plancha" ? "COMANDA PLANCHA" : "";
   const modalidad = modalidadLabel(brief?.modalidad);
@@ -241,6 +258,12 @@ function renderCopia(opts: {
            ${ivaTotal > 0 ? `<tr><td class="lbl">IVA</td><td class="val">${formatGs(ivaTotal)}</td></tr>` : ""}
            <tr class="total-row"><td class="lbl">TOTAL</td><td class="val">${formatGs(total)}</td></tr>
            <tr><td class="lbl">Pago</td><td class="val">${metodoPagoLabel(venta.metodo_pago)}</td></tr>
+           ${(pagosMixto ?? [])
+             .map(
+               (p) =>
+                 `<tr><td class="lbl" style="padding-left:8px;opacity:.8;">· ${metodoDetalleLabel(p.metodo_pago)}</td><td class="val">${formatGs(p.monto)}</td></tr>`
+             )
+             .join("")}
          </tbody>
        </table>`
     : "";
@@ -532,9 +555,30 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ i
     if (hayPlancha) copias.push("plancha");
   }
 
+  // Desglose de formas de pago: solo cuando la venta es mixta. Best-effort —
+  // si falla, el ticket igual sale (muestra "Mixto" sin el detalle).
+  let pagosMixto: Array<{ metodo_pago: string; monto: number }> | undefined;
+  if (venta.metodo_pago === "mixto") {
+    try {
+      const pdQ = await ctx.supabase
+        .from("ventas_pagos_detalle")
+        .select("metodo_pago, monto")
+        .eq("empresa_id", empresaId)
+        .eq("venta_id", id);
+      if (!pdQ.error && pdQ.data) {
+        pagosMixto = (pdQ.data as Array<{ metodo_pago: string; monto: number | string }>).map((d) => ({
+          metodo_pago: d.metodo_pago,
+          monto: Number(d.monto),
+        }));
+      }
+    } catch {
+      pagosMixto = undefined;
+    }
+  }
+
   const seccionesHtml = copias
     .map((tipo, idx) =>
-      renderCopia({ tipo, venta, items, brief, fontPx, isLast: idx === copias.length - 1, negocio })
+      renderCopia({ tipo, venta, items, brief, fontPx, isLast: idx === copias.length - 1, negocio, pagosMixto })
     )
     .join("");
 
