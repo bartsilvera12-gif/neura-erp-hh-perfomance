@@ -1,4 +1,4 @@
-import type { Venta } from "./types";
+import type { MetodoPagoLinea, Venta } from "./types";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 /**
@@ -76,6 +76,23 @@ export type PagoDetalleInput = {
 };
 
 /**
+ * Una forma de pago dentro de un cobro MIXTO (varias formas en una venta).
+ * Cada línea lleva su método y su monto; para transferencia/tarjeta/qr puede
+ * llevar además los datos de conciliación (entidad, comprobante, titular).
+ * La suma de `monto` de todas las líneas (+ saldo a favor) = total de la venta.
+ */
+export type PagoDetalleLineaInput = {
+  metodo_pago: MetodoPagoLinea;
+  monto: number;
+  entidad_bancaria_id?: string | null;
+  entidad_nombre_snapshot?: string | null;
+  referencia?: string | null;
+  titular?: string | null;
+  observacion?: string | null;
+  fecha_acreditacion?: string | null;
+};
+
+/**
  * Lista ventas del tenant (misma fuente que el dashboard: tablas `ventas` / `ventas_items`).
  */
 export async function getVentas(): Promise<Venta[]> {
@@ -104,6 +121,13 @@ export async function saveVenta(
   datos: Omit<Venta, "id" | "numero_control" | "fecha"> & { cliente_id?: string | null; genera_nota_remision?: boolean },
   pedidoCocina?: PedidoCocinaInput,
   pagoDetalle?: PagoDetalleInput | null,
+  /**
+   * Pago mixto: desglose de las formas de pago. Cuando viene con ≥1 línea, el
+   * backend registra una fila por línea en `ventas_pagos_detalle` y la venta se
+   * guarda como `"mixto"`. Si es null/vacío, se usa el flujo clásico de un solo
+   * método (`metodo_pago` + `pagoDetalle`).
+   */
+  pagosDetalle?: PagoDetalleLineaInput[] | null,
   opts?: {
     permitirSinStock?: boolean;
     pedidoId?: string | null;
@@ -138,6 +162,7 @@ export async function saveVenta(
         observaciones: null,
         pedido_cocina: pedidoCocina ?? null,
         pago_detalle: pagoDetalle ?? null,
+        pagos_detalle: pagosDetalle && pagosDetalle.length > 0 ? pagosDetalle : null,
         permitir_sin_stock: opts?.permitirSinStock === true,
         genera_nota_remision: datos.genera_nota_remision === true,
         pedido_id: opts?.pedidoId ?? null,

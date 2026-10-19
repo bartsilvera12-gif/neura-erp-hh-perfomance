@@ -332,6 +332,8 @@ export default function VentasPage() {
                         {v.metodo_pago === "tarjeta" ? "Tarjeta"
                           : v.metodo_pago === "transferencia" ? "Transfer."
                           : v.metodo_pago === "efectivo" ? "Efectivo"
+                          : v.metodo_pago === "qr" ? "QR/Bill."
+                          : v.metodo_pago === "mixto" ? "Mixto"
                           : "—"}
                       </td>
                       <td className="hidden py-4 pr-4 align-middle text-xs text-gray-600 lg:table-cell">
@@ -631,6 +633,8 @@ function VentaDetalleModal({ venta, onClose }: { venta: Venta; onClose: () => vo
     venta.metodo_pago === "tarjeta" ? "Tarjeta"
     : venta.metodo_pago === "transferencia" ? "Transferencia"
     : venta.metodo_pago === "efectivo" ? "Efectivo"
+    : venta.metodo_pago === "qr" ? "QR / Billetera"
+    : venta.metodo_pago === "mixto" ? "Mixto"
     : "—";
   const tipoLabel = venta.tipo_venta === "CONTADO" ? "Contado" : `Crédito ${venta.plazo_dias ?? ""}d`;
   return (

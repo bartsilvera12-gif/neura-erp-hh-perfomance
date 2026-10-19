@@ -76,7 +76,10 @@ export interface CreateVentaPgParams {
   plazoDias: number | null;
   /** Fecha de vencimiento explícita (YYYY-MM-DD) para crédito. Si falta, se calcula con plazoDias. */
   fechaVencimiento?: string | null;
-  metodoPago: "efectivo" | "tarjeta" | "transferencia" | null;
+  /** Forma de pago de la cabecera (`ventas.metodo_pago`). `"mixto"` cuando se
+   *  combinan varias formas o la única no es efectivo/tarjeta/transferencia; el
+   *  desglose completo siempre va en `ventas_pagos_detalle`. */
+  metodoPago: "efectivo" | "tarjeta" | "transferencia" | "mixto" | null;
   items: CreateVentaItemInput[];
   subtotalDeclarado: number;
   montoIvaDeclarado: number;

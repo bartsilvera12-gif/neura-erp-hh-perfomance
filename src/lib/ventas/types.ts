@@ -4,6 +4,12 @@ export type TipoVenta   = "CONTADO" | "CREDITO";
 export type VentaEstado = "pendiente" | "completada" | "anulada" | "parcialmente_devuelta" | "devuelta_total";
 export type MonedaVenta = "GS" | "USD";
 export type MetodoPago  = "efectivo" | "tarjeta" | "transferencia";
+/**
+ * Formas de pago seleccionables en un cobro. Incluye `qr` (QR / billetera) que
+ * se usa en los pagos mixtos. No incluye `mixto`: ese es un valor de CABECERA
+ * de la venta (ver `Venta.metodo_pago`), no de una línea de pago individual.
+ */
+export type MetodoPagoLinea = "efectivo" | "transferencia" | "tarjeta" | "qr";
 /** Nivel de precio elegido para la línea de venta.
  *  'costo' se conserva SOLO como histórico (ventas viejas); ya no se ofrece en la UI. */
 export type TipoPrecioVenta = "minorista" | "mayorista" | "distribuidor" | "costo";
@@ -55,7 +61,12 @@ export interface Venta {
   tipo_venta: TipoVenta;
   plazo_dias?: number;       // solo si tipo_venta === "CREDITO"
 
-  metodo_pago?: MetodoPago;  // En lo de Mari: efectivo/tarjeta/transferencia
+  /**
+   * Forma de pago de la venta. Cuando se cobra con una sola forma guarda esa
+   * (`efectivo`/`tarjeta`/`transferencia`); cuando se combinan varias formas
+   * (pago mixto) guarda `"mixto"` y el desglose va en `ventas_pagos_detalle`.
+   */
+  metodo_pago?: MetodoPago | "qr" | "mixto";
 
   /**
    * Cliente de la venta. Si hay cliente, la venta se factura (se emite factura

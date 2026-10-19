@@ -136,6 +136,78 @@ export async function POST(request: NextRequest) {
         : null;
     const metodoPago: "efectivo" | "tarjeta" | "transferencia" =
       o.metodo_pago === "tarjeta" || o.metodo_pago === "transferencia" ? o.metodo_pago : "efectivo";
+
+    // ── Pago mixto: varias formas de pago en una misma venta. Cuando viene
+    // `pagos_detalle` con ≥1 línea, reemplaza al método único: se registra una
+    // fila por línea en `ventas_pagos_detalle` y la venta se guarda como
+    // "mixto" (o como el único método si todas las líneas usan el mismo). La
+    // suma de las líneas (+ saldo a favor aplicado) debe dar el total.
+    type PagoLineaParsed = {
+      metodo_pago: "efectivo" | "transferencia" | "tarjeta" | "qr";
+      monto: number;
+      entidad_bancaria_id: string | null;
+      entidad_nombre_snapshot: string | null;
+      referencia: string | null;
+      titular: string | null;
+      observacion: string | null;
+      fecha_acreditacion: string | null;
+    };
+    const METODOS_LINEA = new Set(["efectivo", "transferencia", "tarjeta", "qr"]);
+    let pagosLineas: PagoLineaParsed[] | null = null;
+    if (Array.isArray(o.pagos_detalle) && o.pagos_detalle.length > 0) {
+      const strN = (v: unknown, max = 200) =>
+        v === null || v === undefined || String(v).trim() === "" ? null : String(v).trim().slice(0, max);
+      const parsed: PagoLineaParsed[] = [];
+      for (const raw of o.pagos_detalle as unknown[]) {
+        if (!raw || typeof raw !== "object") {
+          return NextResponse.json(errorResponse("Pago mixto: línea de pago inválida."), { status: 400 });
+        }
+        const r = raw as Record<string, unknown>;
+        const metodo = String(r.metodo_pago ?? "");
+        if (!METODOS_LINEA.has(metodo)) {
+          return NextResponse.json(
+            errorResponse(`Pago mixto: la forma de pago "${metodo}" no está permitida.`),
+            { status: 400 }
+          );
+        }
+        const monto = Math.round(Number(r.monto) * 100) / 100;
+        if (!Number.isFinite(monto) || monto <= 0) {
+          return NextResponse.json(
+            errorResponse("Pago mixto: cada forma de pago debe tener un monto mayor a 0."),
+            { status: 400 }
+          );
+        }
+        const fa =
+          typeof r.fecha_acreditacion === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.fecha_acreditacion)
+            ? r.fecha_acreditacion
+            : null;
+        parsed.push({
+          metodo_pago: metodo as PagoLineaParsed["metodo_pago"],
+          monto,
+          entidad_bancaria_id: r.entidad_bancaria_id ? String(r.entidad_bancaria_id) : null,
+          entidad_nombre_snapshot: strN(r.entidad_nombre_snapshot),
+          referencia: strN(r.referencia),
+          titular: strN(r.titular),
+          observacion: strN(r.observacion, 500),
+          fecha_acreditacion: fa,
+        });
+      }
+      pagosLineas = parsed;
+    }
+    // Cabecera de la venta (`ventas.metodo_pago`). El CHECK de la tabla solo
+    // acepta efectivo/tarjeta/transferencia/saldo_favor/mixto (NO "qr"): por eso
+    // se guarda la forma única solo si es una de esas tres; en cualquier otro
+    // caso (varias formas, o una sola que es "qr") se guarda "mixto". El desglose
+    // real siempre queda en `ventas_pagos_detalle`.
+    const metodoPagoHeader: "efectivo" | "tarjeta" | "transferencia" | "mixto" = (() => {
+      if (!pagosLineas) return metodoPago;
+      const distintos = new Set(pagosLineas.map((p) => p.metodo_pago));
+      if (distintos.size === 1) {
+        const unico = pagosLineas[0].metodo_pago;
+        if (unico === "efectivo" || unico === "tarjeta" || unico === "transferencia") return unico;
+      }
+      return "mixto";
+    })();
     const clienteRaw = o.cliente_id;
     const clienteId =
       clienteRaw === null || clienteRaw === undefined || clienteRaw === ""
@@ -266,6 +338,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Pago mixto: validar que el desglose cuadre con lo que resta cobrar
+    // (total − saldo a favor aplicado). Es plata: si no cuadra, se rechaza.
+    if (pagosLineas) {
+      const sumaLineas = pagosLineas.reduce((s, p) => s + p.monto, 0);
+      const aCobrar = Math.round((totalDeclarado - usarSaldo) * 100) / 100;
+      if (Math.abs(sumaLineas - aCobrar) > 1) {
+        return NextResponse.json(
+          errorResponse(
+            `El desglose de pagos (Gs. ${Math.round(sumaLineas).toLocaleString("es-PY")}) no coincide con lo que resta cobrar (Gs. ${Math.round(aCobrar).toLocaleString("es-PY")}).`
+          ),
+          { status: 400 }
+        );
+      }
+    }
+
     const {
       ventaId,
       numeroControl,
@@ -283,7 +370,7 @@ export async function POST(request: NextRequest) {
       tipoCambio,
       tipoVenta,
       plazoDias: Number.isFinite(plazoDias as number) ? plazoDias : null,
-      metodoPago,
+      metodoPago: metodoPagoHeader,
       items,
       subtotalDeclarado,
       montoIvaDeclarado,
@@ -374,8 +461,9 @@ export async function POST(request: NextRequest) {
 
     // Detalle de cobro (conciliación) — best-effort, FUERA de la transacción de
     // venta. Si falla, la venta queda igual (no se rompe ni se afectan recetas).
-    // Con saldo a favor son DOS filas: el saldo aplicado y el resto por el medio
-    // elegido. La suma sigue siendo el total de la venta.
+    // Con saldo a favor va una fila "saldo_favor"; el resto va como una fila por
+    // forma de pago (pago mixto) o como una sola fila del método elegido. La
+    // suma de todas las filas sigue siendo el total de la venta.
     try {
       const pd = (o.pago_detalle ?? null) as Record<string, unknown> | null;
       const str = (v: unknown, max = 200) =>
@@ -396,18 +484,36 @@ export async function POST(request: NextRequest) {
           observacion: "Pagado con saldo a favor del cliente",
         });
       }
-      const resto = Math.round((totalDeclarado - saldoUsado) * 100) / 100;
-      if (resto > 0) {
-        await insertVentaPagoDetalle(schema, auth.empresa_id, ventaId, {
-          metodo_pago: metodoPago,
-          entidad_bancaria_id: pd?.entidad_bancaria_id ? String(pd.entidad_bancaria_id) : null,
-          entidad_nombre_snapshot: str(pd?.entidad_nombre_snapshot),
-          monto: resto,
-          referencia: str(pd?.referencia),
-          titular: str(pd?.titular),
-          fecha_acreditacion: fechaAcred,
-          observacion: str(pd?.observacion, 500),
-        });
+      if (pagosLineas) {
+        // Pago mixto: una fila por forma de pago. La suma de las líneas ya se
+        // validó contra lo que resta cobrar (total − saldo a favor).
+        for (const p of pagosLineas) {
+          await insertVentaPagoDetalle(schema, auth.empresa_id, ventaId, {
+            metodo_pago: p.metodo_pago,
+            entidad_bancaria_id: p.entidad_bancaria_id,
+            entidad_nombre_snapshot: p.entidad_nombre_snapshot,
+            monto: p.monto,
+            referencia: p.referencia,
+            titular: p.titular,
+            fecha_acreditacion: p.fecha_acreditacion,
+            observacion: p.observacion,
+          });
+        }
+      } else {
+        // Flujo clásico de un solo método: el resto (total − saldo) va en una fila.
+        const resto = Math.round((totalDeclarado - saldoUsado) * 100) / 100;
+        if (resto > 0) {
+          await insertVentaPagoDetalle(schema, auth.empresa_id, ventaId, {
+            metodo_pago: metodoPago,
+            entidad_bancaria_id: pd?.entidad_bancaria_id ? String(pd.entidad_bancaria_id) : null,
+            entidad_nombre_snapshot: str(pd?.entidad_nombre_snapshot),
+            monto: resto,
+            referencia: str(pd?.referencia),
+            titular: str(pd?.titular),
+            fecha_acreditacion: fechaAcred,
+            observacion: str(pd?.observacion, 500),
+          });
+        }
       }
     } catch (e) {
       console.error("[ventas/create] pago_detalle best-effort fallo (venta OK):", e instanceof Error ? e.message : e);
