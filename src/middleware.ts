@@ -1,5 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { errorResponse } from "@/lib/api/response";
+import {
+  BLOQUEO_PAGO_MENSAJE,
+  BLOQUEO_PAGO_PATH,
+  ERP_BLOQUEADO_POR_FALTA_DE_PAGO,
+} from "@/lib/bloqueo-pago";
 
 /**
  * Middleware del ERP: refresca la sesión de Supabase en cada request.
@@ -12,6 +18,20 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function middleware(request: NextRequest) {
   // Para assets estáticos no hace falta refrescar la sesión; ahorra latencia.
   if (/\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?|ttf)$/i.test(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
+
+  // ===== ERP bloqueado por falta de pago (ver src/lib/bloqueo-pago.ts) =====
+  if (ERP_BLOQUEADO_POR_FALTA_DE_PAGO) {
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json(errorResponse(BLOQUEO_PAGO_MENSAJE), { status: 402 });
+    }
+    if (request.nextUrl.pathname !== BLOQUEO_PAGO_PATH) {
+      const bloqueoUrl = request.nextUrl.clone();
+      bloqueoUrl.pathname = BLOQUEO_PAGO_PATH;
+      bloqueoUrl.search = "";
+      return NextResponse.redirect(bloqueoUrl, 307);
+    }
     return NextResponse.next({ request });
   }
 
