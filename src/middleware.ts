@@ -1,11 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { errorResponse } from "@/lib/api/response";
-import { BLOQUEO_PAGO_MENSAJE, BLOQUEO_PAGO_PATH, leerBloqueoPago } from "@/lib/bloqueo-pago";
+import { BLOQUEO_PAGO_MENSAJE, BLOQUEO_PAGO_PATH, erpBloqueadoPorFaltaDePago } from "@/lib/bloqueo-pago";
 
 /**
  * Middleware del ERP:
- *  1) Portón de "acceso suspendido por falta de pago" (DB-driven, ver bloqueo-pago.ts).
+ *  1) Portón de "acceso suspendido por falta de pago". Consulta el estado al
+ *     sistema de Neura por el dominio (ver bloqueo-pago.ts); si está bloqueado
+ *     manda todo a /bloqueado y responde 402 en /api. Fail-open.
  *  2) Refresca la sesión de Supabase en cada request.
  */
 export async function middleware(request: NextRequest) {
@@ -15,10 +17,8 @@ export async function middleware(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
-  const suspendido = await leerBloqueoPago();
 
-  if (suspendido) {
-    // Bloqueado: todo va a /bloqueado; las APIs responden 402. (Webhooks quedan fuera del matcher.)
+  if (await erpBloqueadoPorFaltaDePago(request.headers)) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(errorResponse(BLOQUEO_PAGO_MENSAJE), { status: 402 });
     }
@@ -30,8 +30,7 @@ export async function middleware(request: NextRequest) {
     }
     return NextResponse.next({ request });
   }
-
-  // Habilitado: si quedó parado en /bloqueado, al recargar lo mandamos al inicio.
+  // Ya desbloqueado: quien tenga el aviso abierto vuelve al inicio.
   if (pathname === BLOQUEO_PAGO_PATH) {
     const inicio = request.nextUrl.clone();
     inicio.pathname = "/";
