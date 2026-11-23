@@ -1,32 +1,28 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { errorResponse } from "@/lib/api/response";
-import {
-  BLOQUEO_PAGO_MENSAJE,
-  BLOQUEO_PAGO_PATH,
-  ERP_BLOQUEADO_POR_FALTA_DE_PAGO,
-} from "@/lib/bloqueo-pago";
+import { BLOQUEO_PAGO_MENSAJE, BLOQUEO_PAGO_PATH, leerBloqueoPago } from "@/lib/bloqueo-pago";
 
 /**
- * Middleware del ERP: refresca la sesión de Supabase en cada request.
- *
- * El repositorio de origen servía además un sitio web público estático desde
- * `public/sitio/`, reescribiendo las peticiones según el hostname. Esa
- * funcionalidad se retiró por completo en esta instancia: HH Performance es
- * únicamente el ERP.
+ * Middleware del ERP:
+ *  1) Portón de "acceso suspendido por falta de pago" (DB-driven, ver bloqueo-pago.ts).
+ *  2) Refresca la sesión de Supabase en cada request.
  */
 export async function middleware(request: NextRequest) {
-  // Para assets estáticos no hace falta refrescar la sesión; ahorra latencia.
+  // Para assets estáticos no hace falta ni portón ni refresh; ahorra latencia.
   if (/\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?|ttf)$/i.test(request.nextUrl.pathname)) {
     return NextResponse.next({ request });
   }
 
-  // ===== ERP bloqueado por falta de pago (ver src/lib/bloqueo-pago.ts) =====
-  if (ERP_BLOQUEADO_POR_FALTA_DE_PAGO) {
-    if (request.nextUrl.pathname.startsWith("/api/")) {
+  const { pathname } = request.nextUrl;
+  const suspendido = await leerBloqueoPago();
+
+  if (suspendido) {
+    // Bloqueado: todo va a /bloqueado; las APIs responden 402. (Webhooks quedan fuera del matcher.)
+    if (pathname.startsWith("/api/")) {
       return NextResponse.json(errorResponse(BLOQUEO_PAGO_MENSAJE), { status: 402 });
     }
-    if (request.nextUrl.pathname !== BLOQUEO_PAGO_PATH) {
+    if (pathname !== BLOQUEO_PAGO_PATH) {
       const bloqueoUrl = request.nextUrl.clone();
       bloqueoUrl.pathname = BLOQUEO_PAGO_PATH;
       bloqueoUrl.search = "";
@@ -35,6 +31,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  // Habilitado: si quedó parado en /bloqueado, al recargar lo mandamos al inicio.
+  if (pathname === BLOQUEO_PAGO_PATH) {
+    const inicio = request.nextUrl.clone();
+    inicio.pathname = "/";
+    inicio.search = "";
+    return NextResponse.redirect(inicio, 307);
+  }
+
+  // ===== Refresh de sesión Supabase (comportamiento normal) =====
   let supabaseResponse = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
