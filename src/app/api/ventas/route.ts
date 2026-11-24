@@ -62,26 +62,47 @@ export async function GET(request: NextRequest) {
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const empresaId = ctx.auth.empresa_id;
 
-    const ventasQ = await ctx.supabase
-      .from("ventas")
-      .select(
-        "id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva, total, tipo_venta, plazo_dias, metodo_pago, fecha, estado, cliente_id, factura_id, genera_nota_remision, nota_remision_numero, usuario_nombre"
-      )
-      .eq("empresa_id", empresaId)
-      .order("fecha", { ascending: false })
-      .limit(500);
-    if (ventasQ.error) throw new Error(ventasQ.error.message);
+    const PAGE = 1000;
 
-    const itemsQ = await ctx.supabase
-      .from("ventas_items")
-      .select(
-        "venta_id, producto_id, producto_nombre, sku, cantidad, precio_venta_original, precio_venta, tipo_iva, tipo_precio, subtotal, monto_iva, total_linea"
-      )
-      .eq("empresa_id", empresaId);
-    if (itemsQ.error) throw new Error(itemsQ.error.message);
+    // Ventas paginadas (PostgREST corta en 1000 filas por request).
+    const ventasRows: VentaRow[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const ventasQ = await ctx.supabase
+        .from("ventas")
+        .select(
+          "id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva, total, tipo_venta, plazo_dias, metodo_pago, fecha, estado, cliente_id, factura_id, genera_nota_remision, nota_remision_numero, usuario_nombre"
+        )
+        .eq("empresa_id", empresaId)
+        .order("fecha", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (ventasQ.error) throw new Error(ventasQ.error.message);
+      const chunk = (ventasQ.data ?? []) as VentaRow[];
+      ventasRows.push(...chunk);
+      if (chunk.length < PAGE) break;
+    }
 
-    const ventasRows = (ventasQ.data ?? []) as VentaRow[];
-    const itemsRows = (itemsQ.data ?? []) as VentaItemRow[];
+    // Items solo de las ventas listadas, por lotes de venta_id y paginando cada lote.
+    const itemsRows: VentaItemRow[] = [];
+    const BATCH = 100;
+    for (let i = 0; i < ventasRows.length; i += BATCH) {
+      const ids = ventasRows.slice(i, i + BATCH).map((v) => v.id);
+      for (let from = 0; ; from += PAGE) {
+        const itemsQ = await ctx.supabase
+          .from("ventas_items")
+          .select(
+            "venta_id, producto_id, producto_nombre, sku, cantidad, precio_venta_original, precio_venta, tipo_iva, tipo_precio, subtotal, monto_iva, total_linea"
+          )
+          .eq("empresa_id", empresaId)
+          .in("venta_id", ids)
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (itemsQ.error) throw new Error(itemsQ.error.message);
+        const chunk = (itemsQ.data ?? []) as VentaItemRow[];
+        itemsRows.push(...chunk);
+        if (chunk.length < PAGE) break;
+      }
+    }
 
     const byVenta = new Map<string, VentaItemRow[]>();
     for (const row of itemsRows) {

@@ -245,9 +245,32 @@ export async function GET(request: NextRequest) {
      * Si hay rango: se ejecuta secuencial después de ventas para conocer los IDs válidos.
      * Si no hay rango: se ejecuta en paralelo con el resto (comportamiento previo).
      */
+    /** PostgREST corta en 1000 filas: se pagina con .range() (y por lotes de venta_id si se pasan). */
+    const fetchVentasItemsPaginado = async (
+      ventaIds: string[] | null
+    ): Promise<{ data: unknown[] | null; error: { message: string } | null }> => {
+      const PAGE = 1000;
+      const BATCH = 100;
+      const lotes: (string[] | null)[] = [];
+      if (ventaIds === null) lotes.push(null);
+      else for (let i = 0; i < ventaIds.length; i += BATCH) lotes.push(ventaIds.slice(i, i + BATCH));
+      const out: unknown[] = [];
+      for (const lote of lotes) {
+        for (let from = 0; ; from += PAGE) {
+          let q = supabase.from("ventas_items").select("*").eq("empresa_id", empresaId);
+          if (lote) q = q.in("venta_id", lote);
+          const res = await q.order("id", { ascending: true }).range(from, from + PAGE - 1);
+          if (res.error) return { data: null, error: { message: res.error.message } };
+          const chunk = (res.data ?? []) as unknown[];
+          out.push(...chunk);
+          if (chunk.length < PAGE) break;
+        }
+      }
+      return { data: out, error: null };
+    };
     const ventasItemsParalelo = range
       ? Promise.resolve({ data: null as unknown[] | null, error: null as { message: string } | null })
-      : supabase.from("ventas_items").select("*").eq("empresa_id", empresaId);
+      : fetchVentasItemsPaginado(null);
 
     const [
       clientesQ,
@@ -328,11 +351,7 @@ export async function GET(request: NextRequest) {
       if (ventaIds.length === 0) {
         ventasItemsRows = [];
       } else {
-        const itemsRes = await supabase
-          .from("ventas_items")
-          .select("*")
-          .eq("empresa_id", empresaId)
-          .in("venta_id", ventaIds);
+        const itemsRes = await fetchVentasItemsPaginado(ventaIds);
         ventasItemsRows = pickRows("ventas_items", itemsRes, queryErrors);
         if ((ventasItemsRows.length === 0 && queryErrors.ventas_items) || (usarPg && ventasItemsRows.length === 0)) {
           ventasItemsRows = await fallbackVentasItemsPg(dataSchema, empresaId, ventaIds);
